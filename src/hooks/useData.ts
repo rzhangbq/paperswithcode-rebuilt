@@ -60,6 +60,38 @@ export const useCodeLinks = (page = 1, limit = 20) => {
   return { codeLinks, pagination, loading, error };
 };
 
+export const useCodeLinksForPapers = (paperUrls: string[]) => {
+  const [codeLinks, setCodeLinks] = useState<CodeLink[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchCodeLinks = async () => {
+      if (!paperUrls || paperUrls.length === 0) {
+        setCodeLinks([]);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await api.getCodeLinksForPapers(paperUrls);
+        setCodeLinks(result);
+      } catch (err) {
+        setError('Failed to fetch code links for papers');
+        console.error('Error fetching code links for papers:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCodeLinks();
+  }, [paperUrls.join(',')]); // Use join to create a stable dependency
+
+  return { codeLinks, loading, error };
+};
+
 export const useLeaderboard = (dataset: string, task: string) => {
   const [evaluations, setEvaluations] = useState<EvaluationTable[]>([]);
   const [loading, setLoading] = useState(true);

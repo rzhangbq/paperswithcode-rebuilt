@@ -29,7 +29,6 @@ export interface CodeLink {
   repo_url: string;
   mentioned_in_paper: boolean;
   mentioned_in_github?: boolean;
-  framework?: string;
   is_official: boolean;
 }
 

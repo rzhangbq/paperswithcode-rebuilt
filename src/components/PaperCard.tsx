@@ -4,7 +4,7 @@ import { Paper } from '../types';
 
 interface PaperCardProps {
   paper: Paper;
-  codeLinks?: Array<{ repo_url: string; is_official: boolean; framework: string }>;
+  codeLinks?: Array<{ repo_url: string; is_official: boolean }>;
 }
 
 export const PaperCard: React.FC<PaperCardProps> = ({ paper, codeLinks = [] }) => {
@@ -181,33 +181,41 @@ export const PaperCard: React.FC<PaperCardProps> = ({ paper, codeLinks = [] }) =
             <span className="text-sm font-medium text-gray-700">Code Available ({codeLinks.length}):</span>
           </div>
           <div className="space-y-2">
-            {codeLinks.slice(0, 3).map((link, index) => (
-              <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <a
-                    href={link.repo_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`inline-flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium ${
-                      link.is_official
-                        ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                    }`}
-                  >
-                    <span>{link.framework || 'Repository'}</span>
-                    {link.is_official && <span className="text-green-600">★</span>}
-                  </a>
-                  {link.mentioned_in_paper && (
-                    <span className="text-xs bg-blue-100 text-blue-800 px-1 py-0.5 rounded">
-                      In Paper
-                    </span>
-                  )}
+            {codeLinks.slice(0, 3).map((link, index) => {
+              // Debug logging
+              console.log('Code link data:', link);
+              
+              const isOfficial = Boolean(link.is_official);
+              const mentionedInPaper = Boolean(link.mentioned_in_paper);
+              
+              return (
+                <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <a
+                      href={link.repo_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`inline-flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium ${
+                        isOfficial
+                          ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                          : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                      }`}
+                    >
+                      <span>Repository</span>
+                      {isOfficial && <span className="text-green-600">★</span>}
+                    </a>
+                    {mentionedInPaper && (
+                      <span className="text-xs bg-blue-100 text-blue-800 px-1 py-0.5 rounded">
+                        In Paper
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {isOfficial ? 'Official' : 'Community'}
+                  </div>
                 </div>
-                <div className="text-xs text-gray-500">
-                  {link.is_official ? 'Official' : 'Community'}
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {codeLinks.length > 3 && (
               <div className="text-center">
                 <span className="text-xs text-gray-500">+{codeLinks.length - 3} more repositories</span>

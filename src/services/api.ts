@@ -90,6 +90,18 @@ class PapersWithCodeAPI {
     };
   }
 
+  async getCodeLinksForPapers(paperUrls: string[]): Promise<CodeLink[]> {
+    try {
+      const response = await axios.post<CodeLink[]>(`${API_BASE_URL}/code-links/for-papers`, {
+        paperUrls
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching code links for papers:', error);
+      throw error;
+    }
+  }
+
   async getEvaluationTables(page = 1, limit = 20): Promise<{ evaluations: EvaluationTable[], pagination: any }> {
     const response = await this.fetchPaginatedData<EvaluationTable>('evaluations', page, limit);
     return {

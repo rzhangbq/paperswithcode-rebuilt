@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, BookOpen, Code, BarChart3, Database, Layers } from 'lucide-react';
+import { Search, BookOpen, BarChart3, Database, Layers } from 'lucide-react';
 
 interface HeaderProps {
   onSearch: (query: string) => void;
@@ -17,7 +17,6 @@ export const Header: React.FC<HeaderProps> = ({ onSearch, activeTab, onTabChange
 
   const tabs = [
     { id: 'papers', label: 'Papers', icon: BookOpen },
-    { id: 'code', label: 'Code', icon: Code },
     { id: 'leaderboards', label: 'Leaderboards', icon: BarChart3 },
     { id: 'datasets', label: 'Datasets', icon: Database },
     { id: 'methods', label: 'Methods', icon: Layers }

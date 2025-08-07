@@ -5,8 +5,8 @@ import { LeaderboardTable } from './components/LeaderboardTable';
 import { DatasetCard } from './components/DatasetCard';
 import { MethodCard } from './components/MethodCard';
 import { LoadingSpinner } from './components/LoadingSpinner';
-import { usePapers, useCodeLinks, useLeaderboard, useDatasets, useMethods } from './hooks/useData';
-import { AlertCircle, BookOpen, Code, BarChart3, Database, Layers } from 'lucide-react';
+import { usePapers, useCodeLinksForPapers, useLeaderboard, useDatasets, useMethods } from './hooks/useData';
+import { AlertCircle, BookOpen, BarChart3, Database, Layers } from 'lucide-react';
 
 // Helper function to generate page numbers with ellipsis
 function generatePageNumbers(currentPage: number, totalPages: number): (number | string)[] {
@@ -45,10 +45,26 @@ function App() {
   const [jumpToPage, setJumpToPage] = useState('');
 
   const { papers, pagination, loading: papersLoading, error: papersError } = usePapers(searchQuery, currentPage, pageSize);
-  const { codeLinks, loading: codeLoading } = useCodeLinks();
   const { evaluations, loading: leaderboardLoading } = useLeaderboard(selectedDataset, selectedTask);
   const { datasets, loading: datasetsLoading, error: datasetsError } = useDatasets();
   const { methods, loading: methodsLoading, error: methodsError } = useMethods();
+
+  // Get paper URLs for fetching code links
+  const paperUrls = papers?.map(paper => paper.paper_url).filter(Boolean) || [];
+  const { codeLinks, loading: codeLinksLoading } = useCodeLinksForPapers(paperUrls);
+
+  // Debug logging
+  React.useEffect(() => {
+    if (codeLinks && codeLinks.length > 0) {
+      console.log('Total code links loaded for papers:', codeLinks.length);
+      console.log('Sample code link:', codeLinks[0]);
+    }
+    if (papers && papers.length > 0) {
+      console.log('Total papers loaded:', papers.length);
+      console.log('Sample paper title:', papers[0].title);
+      console.log('Sample paper URL:', papers[0].paper_url);
+    }
+  }, [codeLinks, papers]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -138,8 +154,9 @@ function App() {
             <div className="grid gap-6">
               {papers?.map((paper) => {
                 const paperCodeLinks = codeLinks?.filter(link => 
-                  link.paper_title === paper.title
+                  link.paper_url === paper.paper_url
                 ) || [];
+                
                 return (
                   <PaperCard 
                     key={paper.id} 
@@ -202,53 +219,6 @@ function App() {
                 </div>
               </div>
             )}
-          </div>
-        );
-
-      case 'code':
-        if (codeLoading) return <LoadingSpinner />;
-        return (
-          <div className="space-y-6">
-            <div className="flex items-center space-x-2 mb-6">
-              <Code className="w-6 h-6 text-green-600" />
-              <h2 className="text-2xl font-bold text-gray-900">Code Repositories</h2>
-              <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm font-medium">
-                {codeLinks?.length || 0} repositories
-              </span>
-            </div>
-            <div className="grid gap-4">
-              {codeLinks?.slice(0, 20).map((link, index) => (
-                <div key={index} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium text-gray-900">{link.paper_title}</h3>
-                      <a 
-                        href={link.repo_url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        {link.repo_url}
-                      </a>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        link.is_official 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {link.framework}
-                      </span>
-                      {link.is_official && (
-                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
-                          Official
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         );
 

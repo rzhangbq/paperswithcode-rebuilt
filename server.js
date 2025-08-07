@@ -325,6 +325,27 @@ async function getLeaderboard(dataset, task) {
   return [];
 }
 
+// Get code links for specific papers
+async function getCodeLinksForPapers(paperUrls) {
+  if (!paperUrls || paperUrls.length === 0) {
+    return [];
+  }
+  
+  // Create placeholders for the IN clause
+  const placeholders = paperUrls.map(() => '?').join(',');
+  
+  const query = `
+    SELECT 
+      cl.*
+    FROM code_links cl
+    WHERE cl.paper_url IN (${placeholders})
+    ORDER BY cl.paper_url, cl.id
+  `;
+  
+  const codeLinks = await db.all(query, paperUrls);
+  return codeLinks;
+}
+
 // API Endpoints
 
 // Get papers with pagination
@@ -367,6 +388,23 @@ app.get('/api/code-links', async (req, res) => {
   } catch (error) {
     console.error('Error serving code links data:', error);
     res.status(500).json({ error: 'Failed to fetch code links data' });
+  }
+});
+
+// Get code links for specific papers
+app.post('/api/code-links/for-papers', async (req, res) => {
+  try {
+    const { paperUrls } = req.body;
+    
+    if (!paperUrls || !Array.isArray(paperUrls)) {
+      return res.status(400).json({ error: 'paperUrls array is required' });
+    }
+    
+    const codeLinks = await getCodeLinksForPapers(paperUrls);
+    res.json(codeLinks);
+  } catch (error) {
+    console.error('Error serving code links for papers:', error);
+    res.status(500).json({ error: 'Failed to fetch code links for papers' });
   }
 });
 

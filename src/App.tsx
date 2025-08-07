@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Header } from './components/Header';
 import { PaperCard } from './components/PaperCard';
 import { LeaderboardTable } from './components/LeaderboardTable';
+import { LeaderboardChart } from './components/LeaderboardChart';
+import { MetricSelector } from './components/MetricSelector';
 import { DatasetCard } from './components/DatasetCard';
 import { MethodCard } from './components/MethodCard';
 import { LoadingSpinner } from './components/LoadingSpinner';
@@ -43,6 +45,8 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [jumpToPage, setJumpToPage] = useState('');
+  const [showChart, setShowChart] = useState(false);
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>([]);
 
   const { papers, pagination, loading: papersLoading, error: papersError } = usePapers(searchQuery, currentPage, pageSize);
   const { evaluations, loading: leaderboardLoading } = useLeaderboard(selectedDataset, selectedTask);
@@ -77,6 +81,8 @@ function App() {
   // Clear selected dataset when task changes
   React.useEffect(() => {
     setSelectedDataset('');
+    setSelectedMetrics([]);
+    setShowChart(false);
   }, [selectedTask]);
 
   const renderContent = () => {
@@ -381,11 +387,65 @@ function App() {
             ) : leaderboardLoading ? (
               <LoadingSpinner />
             ) : (
-              <LeaderboardTable 
-                evaluations={evaluations}
-                dataset={selectedDataset}
-                task={selectedTask}
-              />
+              <div className="space-y-6">
+                {/* Chart Controls */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <button
+                      onClick={() => setShowChart(!showChart)}
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                        showChart
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {showChart ? 'Hide Chart' : 'Show Chart'}
+                    </button>
+                    {showChart && evaluations.length > 0 && (
+                      <span className="text-sm text-gray-500">
+                        {evaluations.length} data points available
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Chart */}
+                {showChart && evaluations.length > 0 && (
+                  <div className="space-y-4">
+                    {/* Metric Selector */}
+                    <MetricSelector
+                      availableMetrics={Object.keys(evaluations[0]?.metrics || {})}
+                      selectedMetrics={selectedMetrics}
+                      onMetricToggle={(metric) => {
+                        setSelectedMetrics(prev => 
+                          prev.includes(metric)
+                            ? prev.filter(m => m !== metric)
+                            : [...prev, metric]
+                        );
+                      }}
+                      onSelectAll={() => {
+                        setSelectedMetrics(Object.keys(evaluations[0]?.metrics || {}));
+                      }}
+                      onClearAll={() => setSelectedMetrics([])}
+                    />
+                    
+                    {/* Chart Component */}
+                    <LeaderboardChart
+                      evaluations={evaluations}
+                      dataset={selectedDataset}
+                      task={selectedTask}
+                      selectedMetrics={selectedMetrics}
+                    />
+                  </div>
+                )}
+
+                {/* Leaderboard Table */}
+                <LeaderboardTable 
+                  evaluations={evaluations}
+                  dataset={selectedDataset}
+                  task={selectedTask}
+                />
+              </div>
             )}
           </div>
         );

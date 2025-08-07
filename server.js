@@ -441,7 +441,7 @@ async function getAvailableTasks(dataset = null) {
         COUNT(DISTINCT p.id) as paper_count,
         COUNT(DISTINCT d.id) as dataset_count,
         COUNT(DISTINCT m.id) as metric_count,
-        COUNT(DISTINCT CASE WHEN p.paper_date >= date('now', '-2 years') THEN p.id END) as recent_papers
+        COUNT(DISTINCT p.id) as recent_papers
       FROM tasks t
       LEFT JOIN datasets d ON t.id = d.task_id
       LEFT JOIN papers p ON d.id = p.dataset_id
@@ -488,7 +488,7 @@ async function getAvailableTasksWithStats(dataset = null, limit = 50) {
         COUNT(DISTINCT p.id) as paper_count,
         COUNT(DISTINCT d.id) as dataset_count,
         COUNT(DISTINCT m.id) as metric_count,
-        COUNT(DISTINCT CASE WHEN p.paper_date >= date('now', '-2 years') THEN p.id END) as recent_papers,
+        COUNT(DISTINCT p.id) as recent_papers,
         MAX(p.paper_date) as latest_paper_date
       FROM tasks t
       LEFT JOIN datasets d ON t.id = d.task_id
@@ -514,7 +514,7 @@ async function getDatasetsForTask(task) {
       d.name as full_name,
       COUNT(DISTINCT p.id) as paper_count,
       COUNT(DISTINCT m.id) as metric_count,
-      COUNT(DISTINCT CASE WHEN p.paper_date >= date('now', '-2 years') THEN p.id END) as recent_papers,
+      COUNT(DISTINCT p.id) as recent_papers,
       MAX(p.paper_date) as latest_paper_date
     FROM datasets d
     JOIN tasks t ON d.task_id = t.id
@@ -537,7 +537,7 @@ async function getTasksForDataset(dataset) {
       t.name,
       COUNT(DISTINCT p.id) as paper_count,
       COUNT(DISTINCT m.id) as metric_count,
-      COUNT(DISTINCT CASE WHEN p.paper_date >= date('now', '-2 years') THEN p.id END) as recent_papers,
+      COUNT(DISTINCT p.id) as recent_papers,
       MAX(p.paper_date) as latest_paper_date
     FROM tasks t
     JOIN datasets d ON t.id = d.task_id

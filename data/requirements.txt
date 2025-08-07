@@ -1,0 +1,7 @@
+# Dependencies for the Papers with Code database project
+
+# For database building (built-in modules only)
+# sqlite3, json, os, logging, typing are all built-in modules
+
+# For query examples and data analysis
+pandas>=1.3.0 

@@ -162,6 +162,9 @@ function App() {
               {papers?.map((paper) => {
                 const paperCodeLinks = codeLinks?.filter(link => 
                   link.paper_url === paper.paper_url
+                ).filter((link, index, self) => 
+                  // Remove duplicates based on repo_url
+                  index === self.findIndex(l => l.repo_url === link.repo_url)
                 ) || [];
                 
                 return (

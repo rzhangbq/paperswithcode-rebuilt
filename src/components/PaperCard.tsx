@@ -189,7 +189,7 @@ export const PaperCard: React.FC<PaperCardProps> = ({ paper, codeLinks = [] }) =
               const mentionedInPaper = Boolean((link as any).mentioned_in_paper);
               
               return (
-                <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                <div key={`${link.repo_url}-${index}`} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
                   <div className="flex items-center space-x-2">
                     <a
                       href={link.repo_url}

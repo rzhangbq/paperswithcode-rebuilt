@@ -124,7 +124,7 @@ async function getPapers(page = 1, limit = 20, searchTerm = '') {
     }
     
     // Get total count first
-    const countQuery = `
+    let countQuery = `
       SELECT COUNT(*) as total
       FROM papers p
       WHERE p.date IS NOT NULL 
@@ -411,27 +411,44 @@ async function getAvailableDatasets() {
   return datasets;
 }
 
-// Get available tasks for leaderboards
+// Get available tasks for leaderboards with popularity ranking
 async function getAvailableTasks(dataset = null) {
   let query;
   let params = [];
   
   if (dataset) {
-    // Get tasks that have evaluations for this dataset
+    // Get tasks that have evaluations for this dataset, ranked by popularity
     query = `
-      SELECT DISTINCT t.name
+      SELECT 
+        t.name,
+        COUNT(DISTINCT p.id) as paper_count,
+        COUNT(DISTINCT d.id) as dataset_count,
+        COUNT(DISTINCT m.id) as metric_count
       FROM tasks t
       JOIN datasets d ON t.id = d.task_id
+      LEFT JOIN papers p ON d.id = p.dataset_id
+      LEFT JOIN metrics m ON p.id = m.paper_id
       WHERE d.name = ?
-      ORDER BY t.name
+      GROUP BY t.id, t.name
+      ORDER BY paper_count DESC, dataset_count DESC, metric_count DESC, t.name
     `;
     params = [dataset];
   } else {
-    // Get all tasks that have evaluation results
+    // Get all tasks ranked by popularity (papers, datasets, metrics)
     query = `
-      SELECT DISTINCT name
-      FROM tasks
-      ORDER BY name
+      SELECT 
+        t.name,
+        COUNT(DISTINCT p.id) as paper_count,
+        COUNT(DISTINCT d.id) as dataset_count,
+        COUNT(DISTINCT m.id) as metric_count,
+        COUNT(DISTINCT CASE WHEN p.paper_date >= date('now', '-2 years') THEN p.id END) as recent_papers
+      FROM tasks t
+      LEFT JOIN datasets d ON t.id = d.task_id
+      LEFT JOIN papers p ON d.id = p.dataset_id
+      LEFT JOIN metrics m ON p.id = m.paper_id
+      GROUP BY t.id, t.name
+      HAVING paper_count > 0
+      ORDER BY paper_count DESC, recent_papers DESC, dataset_count DESC, metric_count DESC, t.name
     `;
   }
   
@@ -439,37 +456,97 @@ async function getAvailableTasks(dataset = null) {
   return tasks.map(task => task.name);
 }
 
-// Get datasets for a specific task
+// Get available tasks with detailed statistics
+async function getAvailableTasksWithStats(dataset = null, limit = 50) {
+  let query;
+  let params = [];
+  
+  if (dataset) {
+    // Get tasks that have evaluations for this dataset, ranked by popularity
+    query = `
+      SELECT 
+        t.name,
+        COUNT(DISTINCT p.id) as paper_count,
+        COUNT(DISTINCT d.id) as dataset_count,
+        COUNT(DISTINCT m.id) as metric_count,
+        MAX(p.paper_date) as latest_paper_date
+      FROM tasks t
+      JOIN datasets d ON t.id = d.task_id
+      LEFT JOIN papers p ON d.id = p.dataset_id
+      LEFT JOIN metrics m ON p.id = m.paper_id
+      WHERE d.name = ?
+      GROUP BY t.id, t.name
+      ORDER BY paper_count DESC, dataset_count DESC, metric_count DESC, t.name
+      LIMIT ?
+    `;
+    params = [dataset, limit];
+  } else {
+    // Get all tasks ranked by popularity (papers, datasets, metrics)
+    query = `
+      SELECT 
+        t.name,
+        COUNT(DISTINCT p.id) as paper_count,
+        COUNT(DISTINCT d.id) as dataset_count,
+        COUNT(DISTINCT m.id) as metric_count,
+        COUNT(DISTINCT CASE WHEN p.paper_date >= date('now', '-2 years') THEN p.id END) as recent_papers,
+        MAX(p.paper_date) as latest_paper_date
+      FROM tasks t
+      LEFT JOIN datasets d ON t.id = d.task_id
+      LEFT JOIN papers p ON d.id = p.dataset_id
+      LEFT JOIN metrics m ON p.id = m.paper_id
+      GROUP BY t.id, t.name
+      HAVING paper_count > 0
+      ORDER BY paper_count DESC, recent_papers DESC, dataset_count DESC, metric_count DESC, t.name
+      LIMIT ?
+    `;
+    params = [limit];
+  }
+  
+  const tasks = await evaluationDb.all(query, params);
+  return tasks;
+}
+
+// Get datasets for a specific task with popularity ranking
 async function getDatasetsForTask(task) {
   const query = `
     SELECT 
       d.name,
       d.name as full_name,
-      COUNT(p.id) as paper_count
+      COUNT(DISTINCT p.id) as paper_count,
+      COUNT(DISTINCT m.id) as metric_count,
+      COUNT(DISTINCT CASE WHEN p.paper_date >= date('now', '-2 years') THEN p.id END) as recent_papers,
+      MAX(p.paper_date) as latest_paper_date
     FROM datasets d
     JOIN tasks t ON d.task_id = t.id
     LEFT JOIN papers p ON d.id = p.dataset_id
+    LEFT JOIN metrics m ON p.id = m.paper_id
     WHERE t.name = ?
     GROUP BY d.id, d.name
-    ORDER BY paper_count DESC, d.name
+    HAVING paper_count > 0
+    ORDER BY paper_count DESC, recent_papers DESC, metric_count DESC, latest_paper_date DESC, d.name
   `;
   
   const datasets = await evaluationDb.all(query, [task]);
   return datasets;
 }
 
-// Get tasks for a specific dataset
+// Get tasks for a specific dataset with popularity ranking
 async function getTasksForDataset(dataset) {
   const query = `
     SELECT 
       t.name,
-      COUNT(p.id) as paper_count
+      COUNT(DISTINCT p.id) as paper_count,
+      COUNT(DISTINCT m.id) as metric_count,
+      COUNT(DISTINCT CASE WHEN p.paper_date >= date('now', '-2 years') THEN p.id END) as recent_papers,
+      MAX(p.paper_date) as latest_paper_date
     FROM tasks t
     JOIN datasets d ON t.id = d.task_id
     LEFT JOIN papers p ON d.id = p.dataset_id
+    LEFT JOIN metrics m ON p.id = m.paper_id
     WHERE d.name = ?
     GROUP BY t.id, t.name
-    ORDER BY paper_count DESC, t.name
+    HAVING paper_count > 0
+    ORDER BY paper_count DESC, recent_papers DESC, metric_count DESC, latest_paper_date DESC, t.name
   `;
   
   const tasks = await evaluationDb.all(query, [dataset]);
@@ -672,6 +749,19 @@ app.get('/api/leaderboard/tasks', async (req, res) => {
   } catch (error) {
     console.error('Error serving available tasks:', error);
     res.status(500).json({ error: 'Failed to fetch available tasks' });
+  }
+});
+
+// Get available tasks with detailed statistics
+app.get('/api/leaderboard/tasks/stats', async (req, res) => {
+  try {
+    const { dataset } = req.query;
+    const limit = parseInt(req.query.limit) || 50;
+    const tasks = await getAvailableTasksWithStats(dataset, limit);
+    res.json(tasks);
+  } catch (error) {
+    console.error('Error serving available tasks with stats:', error);
+    res.status(500).json({ error: 'Failed to fetch available tasks with stats' });
   }
 });
 

@@ -154,7 +154,10 @@ function App() {
             {pagination && (
               <div className="flex items-center justify-between mt-8">
                 <div className="text-sm text-gray-600">
-                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, pagination.totalItems)} of {pagination.totalItems} papers
+                  {pagination.totalItems > 0 
+                    ? `Showing ${((currentPage - 1) * pageSize) + 1} to ${Math.min(currentPage * pageSize, pagination.totalItems)} of ${pagination.totalItems} papers`
+                    : 'No papers found'
+                  }
                 </div>
                 <div className="flex items-center space-x-2">
                   <button

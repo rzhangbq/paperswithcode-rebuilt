@@ -112,9 +112,9 @@ async function getPapers(page = 1, limit = 20, searchTerm = '') {
     }
     
     // Get total count first
-    const countQuery = query.replace(/SELECT.*FROM/, 'SELECT COUNT(*) as total FROM');
+    const countQuery = query.replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) as total FROM');
     const countResult = await db.get(countQuery, params);
-    const totalItems = countResult.total;
+    const totalItems = countResult ? countResult.total : 0;
     
     // Get papers with pagination
     query += ` ORDER BY p.date DESC, p.id DESC LIMIT ? OFFSET ?`;

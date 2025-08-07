@@ -137,6 +137,47 @@ class PapersWithCodeAPI {
       throw error;
     }
   }
+
+  async getAvailableDatasets(): Promise<any[]> {
+    try {
+      const response = await axios.get<any[]>(`${API_BASE_URL}/leaderboard/datasets`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching available datasets:', error);
+      throw error;
+    }
+  }
+
+  async getAvailableTasks(dataset?: string): Promise<string[]> {
+    try {
+      const params = dataset ? { dataset } : {};
+      const response = await axios.get<string[]>(`${API_BASE_URL}/leaderboard/tasks`, { params });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching available tasks:', error);
+      throw error;
+    }
+  }
+
+  async getTasksForDataset(dataset: string): Promise<Array<{ name: string; paper_count: number }>> {
+    try {
+      const response = await axios.get<Array<{ name: string; paper_count: number }>>(`${API_BASE_URL}/leaderboard/datasets/${encodeURIComponent(dataset)}/tasks`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching tasks for dataset:', error);
+      throw error;
+    }
+  }
+
+  async getDatasetsForTask(task: string): Promise<Array<{ name: string; full_name: string; paper_count: number }>> {
+    try {
+      const response = await axios.get<Array<{ name: string; full_name: string; paper_count: number }>>(`${API_BASE_URL}/leaderboard/tasks/${encodeURIComponent(task)}/datasets`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching datasets for task:', error);
+      throw error;
+    }
+  }
 }
 
 export const api = new PapersWithCodeAPI();

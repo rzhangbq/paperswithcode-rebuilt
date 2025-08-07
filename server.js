@@ -15,11 +15,13 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Database path
-const dbPath = path.join(__dirname, 'data', 'papers_with_code.db');
+// Database paths
+const papersDbPath = path.join(__dirname, 'data', 'papers_with_code.db');
+const evaluationDbPath = path.join(__dirname, 'data', 'evaluation_database.db');
 
-// Database connection
-let db;
+// Database connections
+let papersDb;
+let evaluationDb;
 
 // Cache for frequently accessed data
 const cache = new Map();
@@ -38,21 +40,34 @@ function cleanupCache() {
 // Clean up cache every 10 minutes
 setInterval(cleanupCache, 10 * 60 * 1000);
 
-// Initialize database connection
+// Initialize database connections
 async function initializeDatabase() {
   try {
-    db = await open({
-      filename: dbPath,
+    // Connect to papers database
+    papersDb = await open({
+      filename: papersDbPath,
+      driver: sqlite3.Database
+    });
+    
+    // Connect to evaluation database
+    evaluationDb = await open({
+      filename: evaluationDbPath,
       driver: sqlite3.Database
     });
     
     // Enable WAL mode for better concurrent access
-    await db.exec('PRAGMA journal_mode = WAL;');
-    await db.exec('PRAGMA synchronous = NORMAL;');
-    await db.exec('PRAGMA cache_size = 10000;');
-    await db.exec('PRAGMA temp_store = MEMORY;');
+    await papersDb.exec('PRAGMA journal_mode = WAL;');
+    await papersDb.exec('PRAGMA synchronous = NORMAL;');
+    await papersDb.exec('PRAGMA cache_size = 10000;');
+    await papersDb.exec('PRAGMA temp_store = MEMORY;');
     
-    console.log('Connected to SQLite database:', dbPath);
+    await evaluationDb.exec('PRAGMA journal_mode = WAL;');
+    await evaluationDb.exec('PRAGMA synchronous = NORMAL;');
+    await evaluationDb.exec('PRAGMA cache_size = 10000;');
+    await evaluationDb.exec('PRAGMA temp_store = MEMORY;');
+    
+    console.log('Connected to papers database:', papersDbPath);
+    console.log('Connected to evaluation database:', evaluationDbPath);
   } catch (error) {
     console.error('Failed to connect to database:', error);
     process.exit(1);
@@ -76,14 +91,11 @@ async function getPapers(page = 1, limit = 20, searchTerm = '') {
   }
   
   try {
-    // Simple base query
+    // Query for papers from papers database
     let query = `
       SELECT 
         p.id,
         p.paper_url,
-        p.arxiv_id,
-        p.nips_id,
-        p.openreview_id,
         p.title,
         p.abstract,
         p.short_abstract,
@@ -112,14 +124,30 @@ async function getPapers(page = 1, limit = 20, searchTerm = '') {
     }
     
     // Get total count first
-    const countQuery = query.replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) as total FROM');
-    const countResult = await db.get(countQuery, params);
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM papers p
+      WHERE p.date IS NOT NULL 
+        AND p.date != '' 
+        AND p.date != '2222-12-22' 
+        AND p.date >= '1900-01-01' 
+        AND p.date <= '2030-12-31'
+    `;
+    
+    const countParams = [];
+    if (searchTerm && searchTerm.trim()) {
+      const searchPattern = `%${searchTerm.trim()}%`;
+      countQuery += ` AND (p.title LIKE ? OR p.abstract LIKE ?)`;
+      countParams.push(searchPattern, searchPattern);
+    }
+    
+    const countResult = await papersDb.get(countQuery, countParams);
     const totalItems = countResult ? countResult.total : 0;
     
     // Get papers with pagination
     query += ` ORDER BY p.date DESC, p.id DESC LIMIT ? OFFSET ?`;
     const papersParams = [...params, limit, offset];
-    const papers = await db.all(query, papersParams);
+    const papers = await papersDb.all(query, papersParams);
     
     // Get authors for these papers
     if (papers.length > 0) {
@@ -132,7 +160,7 @@ async function getPapers(page = 1, limit = 20, searchTerm = '') {
         GROUP BY pa.paper_id
       `;
       
-      const authorsResult = await db.all(authorsQuery, paperIds);
+      const authorsResult = await papersDb.all(authorsQuery, paperIds);
       const authorsMap = new Map(authorsResult.map(r => [r.paper_id, r.authors]));
       
       // Combine papers with authors
@@ -193,7 +221,7 @@ async function getCodeLinks(page = 1, limit = 20) {
     LIMIT ? OFFSET ?
   `;
   
-  const codeLinks = await db.all(query, [limit, offset]);
+  const codeLinks = await papersDb.all(query, [limit, offset]);
   const totalItems = codeLinks.length > 0 ? codeLinks[0].total_count : 0;
   
   // Remove the total_count from each row
@@ -223,7 +251,7 @@ async function getEvaluations(page = 1, limit = 20) {
   const offset = (page - 1) * limit;
   
   const countQuery = 'SELECT COUNT(*) as total FROM evaluations';
-  const countResult = await db.get(countQuery);
+  const countResult = await papersDb.get(countQuery);
   const totalItems = countResult.total;
   
   const query = `
@@ -240,7 +268,7 @@ async function getEvaluations(page = 1, limit = 20) {
     LIMIT ? OFFSET ?
   `;
   
-  const evaluations = await db.all(query, [limit, offset]);
+  const evaluations = await papersDb.all(query, [limit, offset]);
   
   // Process evaluations to format categories as array and add placeholder fields
   const processedEvaluations = evaluations.map(evaluation => ({
@@ -268,7 +296,7 @@ async function getMethods(page = 1, limit = 20) {
   const offset = (page - 1) * limit;
   
   const countQuery = 'SELECT COUNT(*) as total FROM methods';
-  const countResult = await db.get(countQuery);
+  const countResult = await papersDb.get(countQuery);
   const totalItems = countResult.total;
   
   const query = `
@@ -277,7 +305,7 @@ async function getMethods(page = 1, limit = 20) {
     LIMIT ? OFFSET ?
   `;
   
-  const methods = await db.all(query, [limit, offset]);
+  const methods = await papersDb.all(query, [limit, offset]);
   
   return {
     data: methods,
@@ -295,7 +323,7 @@ async function getDatasets(page = 1, limit = 20) {
   const offset = (page - 1) * limit;
   
   const countQuery = 'SELECT COUNT(*) as total FROM datasets';
-  const countResult = await db.get(countQuery);
+  const countResult = await papersDb.get(countQuery);
   const totalItems = countResult.total;
   
   const query = `
@@ -304,7 +332,7 @@ async function getDatasets(page = 1, limit = 20) {
     LIMIT ? OFFSET ?
   `;
   
-  const datasets = await db.all(query, [limit, offset]);
+  const datasets = await papersDb.all(query, [limit, offset]);
   
   return {
     data: datasets,
@@ -319,10 +347,35 @@ async function getDatasets(page = 1, limit = 20) {
 
 // Get leaderboard data
 async function getLeaderboard(dataset, task) {
-  // Since the evaluations table only contains task descriptions, not actual evaluation data,
-  // we'll return a placeholder response for now
-  // TODO: Rebuild database with proper evaluation data structure
-  return [];
+  try {
+    const results = await getEvaluationResults(dataset, task, 50);
+    
+    // Convert evaluation results to the format expected by the frontend
+    const evaluations = results.map((result, index) => ({
+      id: result.id,
+      paper: result.paper_url,
+      dataset: result.dataset,
+      task: result.task,
+      metrics: result.metrics,
+      model_name: result.method,
+      paper_title: result.paper_title,
+      paper_url: result.paper_url,
+      authors: [], // We don't have authors in evaluation_results table
+      date: result.date,
+      conference: result.conference
+    }));
+    
+    // Sort by the first available metric in descending order
+    if (evaluations.length > 0 && Object.keys(evaluations[0].metrics).length > 0) {
+      const firstMetric = Object.keys(evaluations[0].metrics)[0];
+      evaluations.sort((a, b) => (b.metrics[firstMetric] || 0) - (a.metrics[firstMetric] || 0));
+    }
+    
+    return evaluations;
+  } catch (error) {
+    console.error('Error fetching leaderboard:', error);
+    return [];
+  }
 }
 
 // Get code links for specific papers
@@ -342,8 +395,140 @@ async function getCodeLinksForPapers(paperUrls) {
     ORDER BY cl.paper_url, cl.id
   `;
   
-  const codeLinks = await db.all(query, paperUrls);
+  const codeLinks = await papersDb.all(query, paperUrls);
   return codeLinks;
+}
+
+// Get available datasets for leaderboards
+async function getAvailableDatasets() {
+  const query = `
+    SELECT DISTINCT d.name, d.full_name, d.description
+    FROM datasets d
+    ORDER BY d.name
+  `;
+  
+  const datasets = await papersDb.all(query);
+  return datasets;
+}
+
+// Get available tasks for leaderboards
+async function getAvailableTasks(dataset = null) {
+  let query;
+  let params = [];
+  
+  if (dataset) {
+    // Get tasks that have evaluations for this dataset
+    query = `
+      SELECT DISTINCT t.name
+      FROM tasks t
+      JOIN datasets d ON t.id = d.task_id
+      WHERE d.name = ?
+      ORDER BY t.name
+    `;
+    params = [dataset];
+  } else {
+    // Get all tasks that have evaluation results
+    query = `
+      SELECT DISTINCT name
+      FROM tasks
+      ORDER BY name
+    `;
+  }
+  
+  const tasks = await evaluationDb.all(query, params);
+  return tasks.map(task => task.name);
+}
+
+// Get datasets for a specific task
+async function getDatasetsForTask(task) {
+  const query = `
+    SELECT 
+      d.name,
+      d.name as full_name,
+      COUNT(p.id) as paper_count
+    FROM datasets d
+    JOIN tasks t ON d.task_id = t.id
+    LEFT JOIN papers p ON d.id = p.dataset_id
+    WHERE t.name = ?
+    GROUP BY d.id, d.name
+    ORDER BY paper_count DESC, d.name
+  `;
+  
+  const datasets = await evaluationDb.all(query, [task]);
+  return datasets;
+}
+
+// Get tasks for a specific dataset
+async function getTasksForDataset(dataset) {
+  const query = `
+    SELECT 
+      t.name,
+      COUNT(p.id) as paper_count
+    FROM tasks t
+    JOIN datasets d ON t.id = d.task_id
+    LEFT JOIN papers p ON d.id = p.dataset_id
+    WHERE d.name = ?
+    GROUP BY t.id, t.name
+    ORDER BY paper_count DESC, t.name
+  `;
+  
+  const tasks = await evaluationDb.all(query, [dataset]);
+  return tasks;
+}
+
+// Get evaluation results for leaderboard
+async function getEvaluationResults(dataset, task, limit = 50) {
+  const query = `
+    SELECT 
+      p.id,
+      p.paper_url,
+      p.paper_title,
+      p.paper_date,
+      p.model_name,
+      p.uses_additional_data,
+      t.name as task_name,
+      d.name as dataset_name
+    FROM papers p
+    JOIN tasks t ON p.task_id = t.id
+    JOIN datasets d ON p.dataset_id = d.id
+    WHERE t.name = ? AND d.name = ?
+    ORDER BY p.paper_date DESC
+    LIMIT ?
+  `;
+  
+  const results = await evaluationDb.all(query, [task, dataset, limit]);
+  
+  // Get metrics for each paper
+  const formattedResults = [];
+  for (const result of results) {
+    const metricsQuery = `
+      SELECT metric_name, metric_value
+      FROM metrics
+      WHERE paper_id = ?
+    `;
+    const metrics = await evaluationDb.all(metricsQuery, [result.id]);
+    
+    // Convert metrics to object
+    const metricsObj = {};
+    for (const metric of metrics) {
+      metricsObj[metric.metric_name] = metric.metric_value;
+    }
+    
+    formattedResults.push({
+      id: result.id,
+      task: result.task_name,
+      dataset: result.dataset_name,
+      method: result.model_name,
+      paper_url: result.paper_url,
+      paper_title: result.paper_title,
+      metrics: metricsObj,
+      date: result.paper_date,
+      conference: '', // Not available in new schema
+      evaluation_date: result.paper_date
+    });
+  }
+  
+  return formattedResults;
 }
 
 // API Endpoints
@@ -467,6 +652,53 @@ app.get('/api/leaderboard', async (req, res) => {
   }
 });
 
+// Get available datasets for leaderboards
+app.get('/api/leaderboard/datasets', async (req, res) => {
+  try {
+    const datasets = await getAvailableDatasets();
+    res.json(datasets);
+  } catch (error) {
+    console.error('Error serving available datasets:', error);
+    res.status(500).json({ error: 'Failed to fetch available datasets' });
+  }
+});
+
+// Get available tasks for leaderboards
+app.get('/api/leaderboard/tasks', async (req, res) => {
+  try {
+    const { dataset } = req.query;
+    const tasks = await getAvailableTasks(dataset);
+    res.json(tasks);
+  } catch (error) {
+    console.error('Error serving available tasks:', error);
+    res.status(500).json({ error: 'Failed to fetch available tasks' });
+  }
+});
+
+// Get tasks for a specific dataset
+app.get('/api/leaderboard/datasets/:dataset/tasks', async (req, res) => {
+  try {
+    const { dataset } = req.params;
+    const tasks = await getTasksForDataset(dataset);
+    res.json(tasks);
+  } catch (error) {
+    console.error('Error serving tasks for dataset:', error);
+    res.status(500).json({ error: 'Failed to fetch tasks for dataset' });
+  }
+});
+
+// Get datasets for a specific task
+app.get('/api/leaderboard/tasks/:task/datasets', async (req, res) => {
+  try {
+    const { task } = req.params;
+    const datasets = await getDatasetsForTask(task);
+    res.json(datasets);
+  } catch (error) {
+    console.error('Error serving datasets for task:', error);
+    res.status(500).json({ error: 'Failed to fetch datasets for task' });
+  }
+});
+
 // Additional useful endpoints
 
 // Get paper by ID
@@ -491,7 +723,7 @@ app.get('/api/papers/:id', async (req, res) => {
       GROUP BY p.id
     `;
     
-    const paper = await db.get(query, [paperId]);
+    const paper = await papersDb.get(query, [paperId]);
     
     if (!paper) {
       return res.status(404).json({ error: 'Paper not found' });
@@ -516,7 +748,7 @@ app.get('/api/papers/:id', async (req, res) => {
 app.get('/api/datasets/list', async (req, res) => {
   try {
     const query = 'SELECT DISTINCT name FROM datasets ORDER BY name';
-    const datasets = await db.all(query);
+    const datasets = await papersDb.all(query);
     res.json(datasets.map(d => d.name));
   } catch (error) {
     console.error('Error fetching datasets list:', error);
@@ -528,7 +760,7 @@ app.get('/api/datasets/list', async (req, res) => {
 app.get('/api/tasks/list', async (req, res) => {
   try {
     const query = 'SELECT DISTINCT name FROM tasks ORDER BY name';
-    const tasks = await db.all(query);
+    const tasks = await papersDb.all(query);
     res.json(tasks.map(t => t.name));
   } catch (error) {
     console.error('Error fetching tasks list:', error);
@@ -540,7 +772,7 @@ app.get('/api/tasks/list', async (req, res) => {
 app.get('/api/methods/list', async (req, res) => {
   try {
     const query = 'SELECT DISTINCT name FROM methods ORDER BY name';
-    const methods = await db.all(query);
+    const methods = await papersDb.all(query);
     res.json(methods.map(m => m.name));
   } catch (error) {
     console.error('Error fetching methods list:', error);
@@ -557,7 +789,7 @@ app.get('/api/stats', async (req, res) => {
     const tables = ['papers', 'authors', 'tasks', 'methods', 'datasets', 'evaluations', 'code_links'];
     
     for (const table of tables) {
-      const result = await db.get(`SELECT COUNT(*) as count FROM ${table}`);
+      const result = await papersDb.get(`SELECT COUNT(*) as count FROM ${table}`);
       stats[table] = result.count;
     }
     
@@ -572,7 +804,8 @@ app.get('/api/stats', async (req, res) => {
 initializeDatabase().then(() => {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    console.log(`Database: ${dbPath}`);
+    console.log(`Papers Database: ${papersDbPath}`);
+    console.log(`Evaluation Database: ${evaluationDbPath}`);
   });
 }).catch(error => {
   console.error('Failed to initialize database:', error);

@@ -509,8 +509,8 @@ def main():
         db.create_tables()
         
         # Insert data from JSON files
-        if os.path.exists('../raw_data/papers.json'):
-            db.insert_papers('../raw_data/papers.json')
+        if os.path.exists('../raw_data/papers-with-abstracts.json'):
+            db.insert_papers('../raw_data/papers-with-abstracts.json')
         
         if os.path.exists('../raw_data/methods.json'):
             db.insert_methods('../raw_data/methods.json')
@@ -518,11 +518,11 @@ def main():
         if os.path.exists('../raw_data/datasets.json'):
             db.insert_datasets('../raw_data/datasets.json')
             
-        if os.path.exists('../raw_data/evaluations.json'):
-            db.insert_evaluations('../raw_data/evaluations.json')
+        if os.path.exists('../raw_data/evaluations-tables.json'):
+            db.insert_evaluations('../raw_data/evaluations-tables.json')
             
-        if os.path.exists('../raw_data/code-links.json'):
-            db.insert_code_links('../raw_data/code-links.json')
+        if os.path.exists('../raw_data/links-between-papers-and-code.json'):
+            db.insert_code_links('../raw_data/links-between-papers-and-code.json')
         
         # Create indexes for better performance
         db.create_indexes()

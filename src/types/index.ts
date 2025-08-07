@@ -37,10 +37,13 @@ export interface EvaluationTable {
   paper: string;
   dataset: string;
   task: string;
-  metrics: Record<string, number>;
+  metrics: Record<string, number | string>;
   model_name: string;
   paper_title: string;
   paper_url: string;
+  authors?: string[];
+  date?: string;
+  conference?: string;
 }
 
 export interface Method {

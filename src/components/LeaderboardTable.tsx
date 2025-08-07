@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, ExternalLink, TrendingUp } from 'lucide-react';
+import { Trophy, ExternalLink, TrendingUp, Calendar, Users, BarChart3 } from 'lucide-react';
 import { EvaluationTable } from '../types';
 
 interface LeaderboardTableProps {
@@ -30,11 +30,16 @@ export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-200">
-        <div className="flex items-center space-x-2">
-          <Trophy className="w-5 h-5 text-yellow-500" />
-          <h3 className="text-lg font-semibold text-gray-900">
-            {task} on {dataset}
-          </h3>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Trophy className="w-5 h-5 text-yellow-500" />
+            <h3 className="text-lg font-semibold text-gray-900">
+              {task} on {dataset}
+            </h3>
+          </div>
+          <div className="text-sm text-gray-500">
+            {evaluations.length} results
+          </div>
         </div>
       </div>
 
@@ -50,6 +55,12 @@ export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Paper
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Authors
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Date
               </th>
               {metricNames.map(metric => (
                 <th key={metric} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -93,11 +104,35 @@ export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({
                     )}
                   </div>
                 </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center space-x-1">
+                    <Users className="w-3 h-3 text-gray-400" />
+                    <div className="text-sm text-gray-900 max-w-xs truncate">
+                      {Array.isArray(evaluation.authors) 
+                        ? evaluation.authors.slice(0, 2).join(', ') + (evaluation.authors.length > 2 ? '...' : '')
+                        : 'Unknown'
+                      }
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center space-x-1">
+                    <Calendar className="w-3 h-3 text-gray-400" />
+                    <span className="text-sm text-gray-900">
+                      {evaluation.date ? new Date(evaluation.date).getFullYear() : 'N/A'}
+                    </span>
+                  </div>
+                </td>
                 {metricNames.map(metric => (
                   <td key={metric} className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-1">
                       <span className="text-sm font-medium text-gray-900">
-                        {evaluation.metrics[metric]?.toFixed(2) || 'N/A'}
+                        {(() => {
+                          const value = evaluation.metrics[metric];
+                          if (value === null || value === undefined) return 'N/A';
+                          const numValue = typeof value === 'string' ? parseFloat(value) : value;
+                          return isNaN(numValue) ? value : numValue.toFixed(2);
+                        })()}
                       </span>
                       {index === 0 && (
                         <TrendingUp className="w-3 h-3 text-green-500" />

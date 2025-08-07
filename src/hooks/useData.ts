@@ -120,6 +120,90 @@ export const useLeaderboard = (dataset: string, task: string) => {
   return { evaluations, loading, error };
 };
 
+export const useAvailableDatasets = () => {
+  const [datasets, setDatasets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchDatasets = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await api.getAvailableDatasets();
+        setDatasets(result);
+      } catch (err) {
+        setError('Failed to fetch available datasets');
+        console.error('Error fetching available datasets:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDatasets();
+  }, []);
+
+  return { datasets, loading, error };
+};
+
+export const useAvailableTasks = (dataset?: string) => {
+  const [tasks, setTasks] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await api.getAvailableTasks(dataset);
+        setTasks(result);
+      } catch (err) {
+        setError('Failed to fetch available tasks');
+        console.error('Error fetching available tasks:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTasks();
+  }, [dataset]);
+
+  return { tasks, loading, error };
+};
+
+export const useTasksForDataset = (dataset: string) => {
+  const [tasks, setTasks] = useState<Array<{ name: string; paper_count: number }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchTasks = async () => {
+      if (!dataset) {
+        setTasks([]);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await api.getTasksForDataset(dataset);
+        setTasks(result);
+      } catch (err) {
+        setError('Failed to fetch tasks for dataset');
+        console.error('Error fetching tasks for dataset:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTasks();
+  }, [dataset]);
+
+  return { tasks, loading, error };
+};
+
 export const useDatasets = (page = 1, limit = 20) => {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [pagination, setPagination] = useState<any>(null);
@@ -174,4 +258,36 @@ export const useMethods = (page = 1, limit = 20) => {
   }, [page, limit]);
 
   return { methods, pagination, loading, error };
+};
+
+export const useDatasetsForTask = (task: string | null) => {
+  const [datasets, setDatasets] = useState<Array<{ name: string; full_name: string; paper_count: number }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!task) {
+      setDatasets([]);
+      setLoading(false);
+      return;
+    }
+
+    const fetchDatasets = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await api.getDatasetsForTask(task);
+        setDatasets(result);
+      } catch (err) {
+        setError('Failed to fetch datasets for task');
+        console.error('Error fetching datasets for task:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDatasets();
+  }, [task]);
+
+  return { datasets, loading, error };
 };

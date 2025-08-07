@@ -20,7 +20,7 @@ export const PaperCard: React.FC<PaperCardProps> = ({ paper, codeLinks = [] }) =
     
     // Check if it's a generic date (like 2021-01-01, 2020-12-01, etc.)
     const day = date.getDate();
-    const month = date.getMonth();
+    // const month = date.getMonth();
     
     // If it's the first day of the month, show only year (common placeholder)
     if (day === 1) {
@@ -186,7 +186,7 @@ export const PaperCard: React.FC<PaperCardProps> = ({ paper, codeLinks = [] }) =
               console.log('Code link data:', link);
               
               const isOfficial = Boolean(link.is_official);
-              const mentionedInPaper = Boolean(link.mentioned_in_paper);
+              const mentionedInPaper = Boolean((link as any).mentioned_in_paper);
               
               return (
                 <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">

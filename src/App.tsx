@@ -5,7 +5,7 @@ import { LeaderboardTable } from './components/LeaderboardTable';
 import { DatasetCard } from './components/DatasetCard';
 import { MethodCard } from './components/MethodCard';
 import { LoadingSpinner } from './components/LoadingSpinner';
-import { usePapers, useCodeLinksForPapers, useLeaderboard, useDatasets, useMethods } from './hooks/useData';
+import { usePapers, useCodeLinksForPapers, useLeaderboard, useDatasets, useMethods, useAvailableTasks, useDatasetsForTask } from './hooks/useData';
 import { AlertCircle, BookOpen, BarChart3, Database, Layers } from 'lucide-react';
 
 // Helper function to generate page numbers with ellipsis
@@ -38,8 +38,8 @@ function generatePageNumbers(currentPage: number, totalPages: number): (number |
 function App() {
   const [activeTab, setActiveTab] = useState('papers');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDataset, setSelectedDataset] = useState('ImageNet');
-  const [selectedTask, setSelectedTask] = useState('Image Classification');
+  const [selectedDataset, setSelectedDataset] = useState('');
+  const [selectedTask, setSelectedTask] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [jumpToPage, setJumpToPage] = useState('');
@@ -48,10 +48,12 @@ function App() {
   const { evaluations, loading: leaderboardLoading } = useLeaderboard(selectedDataset, selectedTask);
   const { datasets, loading: datasetsLoading, error: datasetsError } = useDatasets();
   const { methods, loading: methodsLoading, error: methodsError } = useMethods();
+  const { tasks: availableTasks, loading: availableTasksLoading } = useAvailableTasks();
+  const { datasets: taskDatasets, loading: taskDatasetsLoading } = useDatasetsForTask(selectedTask);
 
   // Get paper URLs for fetching code links
-  const paperUrls = papers?.map(paper => paper.paper_url).filter(Boolean) || [];
-  const { codeLinks, loading: codeLinksLoading } = useCodeLinksForPapers(paperUrls);
+  const paperUrls = papers?.map(paper => paper.paper_url).filter((url): url is string => Boolean(url)) || [];
+  const { codeLinks } = useCodeLinksForPapers(paperUrls);
 
   // Debug logging
   React.useEffect(() => {
@@ -71,6 +73,11 @@ function App() {
     setActiveTab('papers');
     setCurrentPage(1); // Reset to first page when searching
   };
+
+  // Clear selected dataset when task changes
+  React.useEffect(() => {
+    setSelectedDataset('');
+  }, [selectedTask]);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -231,41 +238,144 @@ function App() {
             </div>
             
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Dataset
-                  </label>
-                  <select
-                    value={selectedDataset}
-                    onChange={(e) => setSelectedDataset(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Leaderboard Settings</h3>
+                {(selectedTask || selectedDataset) && (
+                  <button
+                    onClick={() => {
+                      setSelectedTask('');
+                      setSelectedDataset('');
+                    }}
+                    className="text-sm text-gray-500 hover:text-gray-700"
                   >
-                    <option value="ImageNet">ImageNet</option>
-                    <option value="CIFAR-10">CIFAR-10</option>
-                    <option value="MNIST">MNIST</option>
-                    <option value="COCO">COCO</option>
-                  </select>
-                </div>
+                    Clear Selection
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Task
                   </label>
-                  <select
-                    value={selectedTask}
-                    onChange={(e) => setSelectedTask(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="Image Classification">Image Classification</option>
-                    <option value="Object Detection">Object Detection</option>
-                    <option value="Semantic Segmentation">Semantic Segmentation</option>
-                    <option value="Instance Segmentation">Instance Segmentation</option>
-                  </select>
+                  {availableTasksLoading ? (
+                    <div className="text-sm text-gray-500">Loading tasks...</div>
+                  ) : (
+                    <select
+                      value={selectedTask}
+                      onChange={(e) => setSelectedTask(e.target.value)}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Select a task</option>
+                      {availableTasks.map((task) => (
+                        <option key={task} value={task}>
+                          {task}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Dataset
+                  </label>
+                  {!selectedTask ? (
+                    <select
+                      disabled
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-500 cursor-not-allowed"
+                    >
+                      <option value="">Select a task first</option>
+                    </select>
+                  ) : taskDatasetsLoading ? (
+                    <div className="text-sm text-gray-500">Loading datasets...</div>
+                  ) : (
+                    <select
+                      value={selectedDataset}
+                      onChange={(e) => setSelectedDataset(e.target.value)}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Select a dataset</option>
+                      {taskDatasets.map((dataset) => (
+                        <option key={dataset.name} value={dataset.name}>
+                          {dataset.full_name || dataset.name} ({dataset.paper_count} papers)
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
             </div>
 
-            {leaderboardLoading ? (
+            {!selectedTask || !selectedDataset ? (
+              <div className="space-y-6">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+                  <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Select Task and Dataset</h3>
+                  <p className="text-gray-600">
+                    {!selectedTask 
+                      ? "First, select a task to see available datasets"
+                      : "Now select a dataset to view the leaderboard"
+                    }
+                  </p>
+                </div>
+                
+                {/* Popular Tasks */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Popular Tasks</h4>
+                  {availableTasksLoading ? (
+                    <div className="text-center py-8">
+                      <div className="text-sm text-gray-500">Loading tasks...</div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {availableTasks.slice(0, 6).map((task) => (
+                        <div 
+                          key={task}
+                          className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 cursor-pointer transition-colors"
+                          onClick={() => setSelectedTask(task)}
+                        >
+                          <h5 className="font-medium text-gray-900">{task}</h5>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Datasets for Selected Task */}
+                {selectedTask && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                      Datasets for {selectedTask}
+                    </h4>
+                    {taskDatasetsLoading ? (
+                      <div className="text-center py-8">
+                        <div className="text-sm text-gray-500">Loading datasets...</div>
+                      </div>
+                    ) : taskDatasets.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {taskDatasets.slice(0, 9).map((dataset) => (
+                          <div 
+                            key={dataset.name}
+                            className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 cursor-pointer transition-colors"
+                            onClick={() => setSelectedDataset(dataset.name)}
+                          >
+                            <h5 className="font-medium text-gray-900">{dataset.full_name || dataset.name}</h5>
+                            <p className="text-sm text-gray-500 mt-1">
+                              {dataset.paper_count} papers
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="text-sm text-gray-500">No datasets found for this task</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+
+              </div>
+            ) : leaderboardLoading ? (
               <LoadingSpinner />
             ) : (
               <LeaderboardTable 

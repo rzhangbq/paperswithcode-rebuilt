@@ -291,24 +291,64 @@ async function getEvaluations(page = 1, limit = 20) {
   };
 }
 
-// Get methods with pagination
-async function getMethods(page = 1, limit = 20) {
+// Get methods with pagination and enhanced data
+async function getMethods(page = 1, limit = 20, searchTerm = '', area = '', category = '') {
   const offset = (page - 1) * limit;
   
-  const countQuery = 'SELECT COUNT(*) as total FROM methods';
-  const countResult = await papersDb.get(countQuery);
-  const totalItems = countResult.total;
-  
-  const query = `
-    SELECT * FROM methods
-    ORDER BY id
-    LIMIT ? OFFSET ?
+  let countQuery = 'SELECT COUNT(DISTINCT m.id) as total FROM methods m';
+  let query = `
+    SELECT 
+      m.*,
+      GROUP_CONCAT(DISTINCT mc.name) as categories,
+      GROUP_CONCAT(DISTINCT ma.area_name) as areas
+    FROM methods m
+    LEFT JOIN method_categories_rel mcr ON m.id = mcr.method_id
+    LEFT JOIN method_categories mc ON mcr.category_id = mc.id
+    LEFT JOIN method_areas ma ON mc.area_id = ma.id
   `;
   
-  const methods = await papersDb.all(query, [limit, offset]);
+  let whereConditions = [];
+  let params = [];
+  
+  if (searchTerm && searchTerm.trim()) {
+    whereConditions.push('(m.name LIKE ? OR m.full_name LIKE ? OR m.description LIKE ?)');
+    const searchPattern = `%${searchTerm.trim()}%`;
+    params.push(searchPattern, searchPattern, searchPattern);
+  }
+  
+  if (area && area.trim()) {
+    whereConditions.push('ma.area_name = ?');
+    params.push(area.trim());
+  }
+  
+  if (category && category.trim()) {
+    whereConditions.push('mc.name = ?');
+    params.push(category.trim());
+  }
+  
+  if (whereConditions.length > 0) {
+    const whereClause = 'WHERE ' + whereConditions.join(' AND ');
+    countQuery += ' LEFT JOIN method_categories_rel mcr ON m.id = mcr.method_id LEFT JOIN method_categories mc ON mcr.category_id = mc.id LEFT JOIN method_areas ma ON mc.area_id = ma.id ' + whereClause;
+    query += ' ' + whereClause;
+  }
+  
+  query += ' GROUP BY m.id ORDER BY m.num_papers DESC, m.name LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+  
+  const countResult = await papersDb.get(countQuery, params.slice(0, -2));
+  const totalItems = countResult.total;
+  
+  const methods = await papersDb.all(query, params);
+  
+  // Parse categories and areas from GROUP_CONCAT results
+  const processedMethods = methods.map(method => ({
+    ...method,
+    categories: method.categories ? method.categories.split(',') : [],
+    areas: method.areas ? method.areas.split(',') : []
+  }));
   
   return {
-    data: methods,
+    data: processedMethods,
     pagination: {
       page,
       limit,
@@ -318,21 +358,86 @@ async function getMethods(page = 1, limit = 20) {
   };
 }
 
+// Get methods hierarchy (areas and categories)
+async function getMethodsHierarchy() {
+  const query = `
+    SELECT 
+      ma.area_name,
+      mc.name as category_name,
+      COUNT(DISTINCT m.id) as method_count,
+      COUNT(DISTINCT pm.paper_id) as paper_count
+    FROM method_areas ma
+    LEFT JOIN method_categories mc ON ma.id = mc.area_id
+    LEFT JOIN method_categories_rel mcr ON mc.id = mcr.category_id
+    LEFT JOIN methods m ON mcr.method_id = m.id
+    LEFT JOIN paper_methods pm ON m.id = pm.method_id
+    GROUP BY ma.id, ma.area_name, mc.id, mc.name
+    ORDER BY ma.area_name, paper_count DESC, method_count DESC, mc.name
+  `;
+  
+  const results = await papersDb.all(query);
+  
+  // Group by areas
+  const hierarchy = {};
+  results.forEach(row => {
+    if (!hierarchy[row.area_name]) {
+      hierarchy[row.area_name] = [];
+    }
+    if (row.category_name) {
+      hierarchy[row.area_name].push({
+        name: row.category_name,
+        method_count: row.method_count,
+        paper_count: row.paper_count
+      });
+    }
+  });
+  
+  return hierarchy;
+}
+
+// Get methods by area
+async function getMethodsByArea(areaName, page = 1, limit = 20) {
+  return await getMethods(page, limit, '', areaName, '');
+}
+
+// Get methods by category
+async function getMethodsByCategory(categoryName, page = 1, limit = 20) {
+  return await getMethods(page, limit, '', '', categoryName);
+}
+
 // Get datasets with pagination
-async function getDatasets(page = 1, limit = 20) {
+async function getDatasets(page = 1, limit = 20, searchTerm = '') {
   const offset = (page - 1) * limit;
   
-  const countQuery = 'SELECT COUNT(*) as total FROM datasets';
-  const countResult = await papersDb.get(countQuery);
-  const totalItems = countResult.total;
-  
-  const query = `
+  let countQuery = 'SELECT COUNT(*) as total FROM datasets';
+  let query = `
     SELECT * FROM datasets
     ORDER BY id
     LIMIT ? OFFSET ?
   `;
+  let params = [limit, offset];
+  let countParams = [];
   
-  const datasets = await papersDb.all(query, [limit, offset]);
+  if (searchTerm && searchTerm.trim()) {
+    const searchPattern = `%${searchTerm.trim()}%`;
+    countQuery = `
+      SELECT COUNT(*) as total FROM datasets 
+      WHERE name LIKE ? OR full_name LIKE ? OR description LIKE ? OR short_description LIKE ?
+    `;
+    query = `
+      SELECT * FROM datasets
+      WHERE name LIKE ? OR full_name LIKE ? OR description LIKE ? OR short_description LIKE ?
+      ORDER BY id
+      LIMIT ? OFFSET ?
+    `;
+    params = [searchPattern, searchPattern, searchPattern, searchPattern, limit, offset];
+    countParams = [searchPattern, searchPattern, searchPattern, searchPattern];
+  }
+  
+  const countResult = await papersDb.get(countQuery, countParams);
+  const totalItems = countResult.total;
+  
+  const datasets = await papersDb.all(query, params);
   
   return {
     data: datasets,
@@ -348,7 +453,7 @@ async function getDatasets(page = 1, limit = 20) {
 // Get leaderboard data
 async function getLeaderboard(dataset, task) {
   try {
-    const results = await getEvaluationResults(dataset, task, 50);
+    const results = await getEvaluationResults(dataset, task, 1000);
     
     // Convert evaluation results to the format expected by the frontend
     const evaluations = results.map((result, index) => ({
@@ -541,11 +646,10 @@ async function getTasksForDataset(dataset) {
       MAX(p.paper_date) as latest_paper_date
     FROM tasks t
     JOIN datasets d ON t.id = d.task_id
-    LEFT JOIN papers p ON d.id = p.dataset_id
-    LEFT JOIN metrics m ON p.id = m.paper_id
+    JOIN papers p ON d.id = p.dataset_id
+    JOIN metrics m ON p.id = m.paper_id
     WHERE d.name = ?
     GROUP BY t.id, t.name
-    HAVING paper_count > 0
     ORDER BY paper_count DESC, recent_papers DESC, metric_count DESC, latest_paper_date DESC, t.name
   `;
   
@@ -554,9 +658,9 @@ async function getTasksForDataset(dataset) {
 }
 
 // Get evaluation results for leaderboard
-async function getEvaluationResults(dataset, task, limit = 50) {
+async function getEvaluationResults(dataset, task, limit = 1000) {
   const query = `
-    SELECT 
+    SELECT DISTINCT
       p.id,
       p.paper_url,
       p.paper_title,
@@ -568,6 +672,7 @@ async function getEvaluationResults(dataset, task, limit = 50) {
     FROM papers p
     JOIN tasks t ON p.task_id = t.id
     JOIN datasets d ON p.dataset_id = d.id
+    JOIN metrics m ON p.id = m.paper_id
     WHERE t.name = ? AND d.name = ?
     ORDER BY p.paper_date DESC
     LIMIT ?
@@ -607,6 +712,27 @@ async function getEvaluationResults(dataset, task, limit = 50) {
   
   return formattedResults;
 }
+
+// Check if a dataset has leaderboard data
+async function checkDatasetHasLeaderboardData(dataset) {
+  try {
+    const query = `
+      SELECT COUNT(*) as count
+      FROM papers p
+      JOIN datasets d ON p.dataset_id = d.id
+      WHERE d.name = ?
+      LIMIT 1
+    `;
+    
+    const result = await evaluationDb.get(query, [dataset]);
+    return result.count > 0;
+  } catch (error) {
+    console.error('Error checking dataset leaderboard data:', error);
+    return false;
+  }
+}
+
+
 
 // API Endpoints
 
@@ -689,12 +815,56 @@ app.get('/api/methods', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
+    const searchTerm = req.query.search || '';
+    const area = req.query.area || '';
+    const category = req.query.category || '';
     
-    const result = await getMethods(page, limit);
+    const result = await getMethods(page, limit, searchTerm, area, category);
     res.json(result);
   } catch (error) {
     console.error('Error serving methods data:', error);
     res.status(500).json({ error: 'Failed to fetch methods data' });
+  }
+});
+
+// Get methods hierarchy
+app.get('/api/methods/hierarchy', async (req, res) => {
+  try {
+    const hierarchy = await getMethodsHierarchy();
+    res.json(hierarchy);
+  } catch (error) {
+    console.error('Error serving methods hierarchy:', error);
+    res.status(500).json({ error: 'Failed to fetch methods hierarchy' });
+  }
+});
+
+// Get methods by area
+app.get('/api/methods/area/:area', async (req, res) => {
+  try {
+    const { area } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    
+    const result = await getMethodsByArea(area, page, limit);
+    res.json(result);
+  } catch (error) {
+    console.error('Error serving methods by area:', error);
+    res.status(500).json({ error: 'Failed to fetch methods by area' });
+  }
+});
+
+// Get methods by category
+app.get('/api/methods/category/:category', async (req, res) => {
+  try {
+    const { category } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    
+    const result = await getMethodsByCategory(category, page, limit);
+    res.json(result);
+  } catch (error) {
+    console.error('Error serving methods by category:', error);
+    res.status(500).json({ error: 'Failed to fetch methods by category' });
   }
 });
 
@@ -703,8 +873,9 @@ app.get('/api/datasets', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
+    const searchTerm = req.query.search || '';
     
-    const result = await getDatasets(page, limit);
+    const result = await getDatasets(page, limit, searchTerm);
     res.json(result);
   } catch (error) {
     console.error('Error serving datasets data:', error);
@@ -786,6 +957,30 @@ app.get('/api/leaderboard/tasks/:task/datasets', async (req, res) => {
   } catch (error) {
     console.error('Error serving datasets for task:', error);
     res.status(500).json({ error: 'Failed to fetch datasets for task' });
+  }
+});
+
+// Check if a dataset has leaderboard data
+app.get('/api/leaderboard/datasets/:dataset/has-data', async (req, res) => {
+  try {
+    const { dataset } = req.params;
+    const hasData = await checkDatasetHasLeaderboardData(dataset);
+    res.json({ hasData });
+  } catch (error) {
+    console.error('Error checking dataset leaderboard data:', error);
+    res.status(500).json({ error: 'Failed to check dataset leaderboard data' });
+  }
+});
+
+// Get available tasks for a specific dataset
+app.get('/api/leaderboard/datasets/:dataset/tasks', async (req, res) => {
+  try {
+    const { dataset } = req.params;
+    const tasks = await getTasksForDataset(dataset);
+    res.json(tasks);
+  } catch (error) {
+    console.error('Error serving tasks for dataset:', error);
+    res.status(500).json({ error: 'Failed to fetch tasks for dataset' });
   }
 });
 

@@ -47,27 +47,47 @@ export interface EvaluationTable {
 }
 
 export interface Method {
+  id: number;
+  url?: string;
   name: string;
   full_name: string;
   description: string;
-  paper: string;
-  paper_title: string;
+  paper_title?: string;
+  paper_url?: string;
+  introduced_year?: number;
+  source_url?: string;
+  source_title?: string;
+  code_snippet_url?: string;
+  num_papers?: number;
   categories: string[];
-  introduced_year: number;
+  areas: string[];
+}
+
+export interface MethodCategory {
+  name: string;
+  method_count: number;
+  paper_count: number;
+}
+
+export interface MethodArea {
+  name: string;
+  categories: MethodCategory[];
+}
+
+export interface MethodsHierarchy {
+  [areaName: string]: MethodCategory[];
 }
 
 export interface Dataset {
+  id: number;
   name: string;
   full_name: string;
   description: string;
+  short_description: string;
   url: string;
-  tasks: string[];
-  languages: string[];
-  modalities: string[];
-  size: string;
-  paper: string;
-  paper_title: string;
-  introduced_year: number;
+  homepage: string;
+  image: string;
+  parent_dataset?: string;
 }
 
 export interface SearchFilters {

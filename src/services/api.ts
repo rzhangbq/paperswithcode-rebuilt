@@ -17,7 +17,7 @@ interface PaginatedResponse<T> {
 
 class PapersWithCodeAPI {
   private cache = new Map<string, { data: any; timestamp: number }>();
-  private CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+  private CACHE_TTL = 10 * 1000; // 10 seconds for debugging
 
   private async fetchPaginatedData<T>(endpoint: string, page = 1, limit = 20): Promise<PaginatedResponse<T>> {
     const cacheKey = `${endpoint}_${page}_${limit}`;
@@ -110,12 +110,57 @@ class PapersWithCodeAPI {
     };
   }
 
-  async getMethods(page = 1, limit = 20): Promise<{ methods: Method[], pagination: any }> {
-    const response = await this.fetchPaginatedData<Method>('methods', page, limit);
+  async getMethods(page = 1, limit = 20, searchTerm = '', area = '', category = ''): Promise<{ methods: Method[], pagination: any }> {
+    const params: any = { page, limit };
+    if (searchTerm) params.search = searchTerm;
+    if (area) params.area = area;
+    if (category) params.category = category;
+    
+    const response = await axios.get<PaginatedResponse<Method>>(`${API_BASE_URL}/methods`, { params });
     return {
-      methods: response.data,
-      pagination: response.pagination
+      methods: response.data.data,
+      pagination: response.data.pagination
     };
+  }
+
+  async getMethodsHierarchy(): Promise<any> {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/methods/hierarchy`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching methods hierarchy:', error);
+      throw error;
+    }
+  }
+
+  async getMethodsByArea(area: string, page = 1, limit = 20): Promise<{ methods: Method[], pagination: any }> {
+    try {
+      const response = await axios.get<PaginatedResponse<Method>>(`${API_BASE_URL}/methods/area/${encodeURIComponent(area)}`, {
+        params: { page, limit }
+      });
+      return {
+        methods: response.data.data,
+        pagination: response.data.pagination
+      };
+    } catch (error) {
+      console.error('Error fetching methods by area:', error);
+      throw error;
+    }
+  }
+
+  async getMethodsByCategory(category: string, page = 1, limit = 20): Promise<{ methods: Method[], pagination: any }> {
+    try {
+      const response = await axios.get<PaginatedResponse<Method>>(`${API_BASE_URL}/methods/category/${encodeURIComponent(category)}`, {
+        params: { page, limit }
+      });
+      return {
+        methods: response.data.data,
+        pagination: response.data.pagination
+      };
+    } catch (error) {
+      console.error('Error fetching methods by category:', error);
+      throw error;
+    }
   }
 
   async getDatasets(page = 1, limit = 20): Promise<{ datasets: Dataset[], pagination: any }> {
@@ -124,6 +169,36 @@ class PapersWithCodeAPI {
       datasets: response.data,
       pagination: response.pagination
     };
+  }
+
+  async searchDatasets(query: string, page = 1, limit = 20): Promise<{ datasets: Dataset[], pagination: any }> {
+    const cacheKey = `search_datasets_${query}_${page}_${limit}`;
+    const now = Date.now();
+    
+    // Check cache with TTL
+    if (this.cache.has(cacheKey)) {
+      const cached = this.cache.get(cacheKey)!;
+      if (now - cached.timestamp < this.CACHE_TTL) {
+        return cached.data;
+      }
+    }
+    
+    try {
+      const response = await axios.get<PaginatedResponse<Dataset>>(`${API_BASE_URL}/datasets`, {
+        params: { search: query, page, limit }
+      });
+      
+      const result = {
+        datasets: response.data.data,
+        pagination: response.data.pagination
+      };
+      
+      this.cache.set(cacheKey, { data: result, timestamp: now });
+      return result;
+    } catch (error) {
+      console.error('Error searching datasets:', error);
+      throw error;
+    }
   }
 
   async getLeaderboard(dataset: string, task: string): Promise<EvaluationTable[]> {
@@ -161,7 +236,9 @@ class PapersWithCodeAPI {
 
   async getTasksForDataset(dataset: string): Promise<Array<{ name: string; paper_count: number }>> {
     try {
-      const response = await axios.get<Array<{ name: string; paper_count: number }>>(`${API_BASE_URL}/leaderboard/datasets/${encodeURIComponent(dataset)}/tasks`);
+      const response = await axios.get<Array<{ name: string; paper_count: number }>>(`${API_BASE_URL}/leaderboard/datasets/${encodeURIComponent(dataset)}/tasks`, {
+        params: { _t: Date.now() } // Cache busting
+      });
       return response.data;
     } catch (error) {
       console.error('Error fetching tasks for dataset:', error);
@@ -178,6 +255,18 @@ class PapersWithCodeAPI {
       throw error;
     }
   }
+
+  async checkDatasetHasLeaderboardData(dataset: string): Promise<boolean> {
+    try {
+      const response = await axios.get<{ hasData: boolean }>(`${API_BASE_URL}/leaderboard/datasets/${encodeURIComponent(dataset)}/has-data`);
+      return response.data.hasData;
+    } catch (error) {
+      console.error('Error checking dataset leaderboard data:', error);
+      return false;
+    }
+  }
+
+
 }
 
 export const api = new PapersWithCodeAPI();

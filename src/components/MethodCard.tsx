@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, Calendar, Tag, BookOpen } from 'lucide-react';
+import { Layers, Calendar, Tag, BookOpen, FileText, ExternalLink, Users } from 'lucide-react';
 import { Method } from '../types';
 
 interface MethodCardProps {
@@ -16,20 +16,49 @@ export const MethodCard: React.FC<MethodCardProps> = ({ method }) => {
             {method.full_name || method.name}
           </h3>
         </div>
-        {method.introduced_year && (
-          <div className="flex items-center space-x-1 text-sm text-gray-600">
-            <Calendar className="w-4 h-4" />
-            <span>{method.introduced_year}</span>
-          </div>
-        )}
+        <div className="flex items-center space-x-3">
+          {method.num_papers && (
+            <div className="flex items-center space-x-1 text-sm text-gray-600">
+              <Users className="w-4 h-4" />
+              <span>{method.num_papers.toLocaleString()}</span>
+            </div>
+          )}
+          {method.introduced_year && (
+            <div className="flex items-center space-x-1 text-sm text-gray-600">
+              <Calendar className="w-4 h-4" />
+              <span>{method.introduced_year}</span>
+            </div>
+          )}
+        </div>
       </div>
 
-      <p className="text-gray-700 text-sm leading-relaxed mb-4">
-        {method.description}
-      </p>
+      {method.description && (
+        <p className="text-gray-700 text-sm leading-relaxed mb-4">
+          {method.description}
+        </p>
+      )}
 
       <div className="space-y-3">
-        {method.categories.length > 0 && (
+        {method.areas && method.areas.length > 0 && (
+          <div className="flex items-start space-x-2">
+            <Tag className="w-4 h-4 text-gray-500 mt-0.5" />
+            <div>
+              <span className="text-sm font-medium text-gray-700">Areas: </span>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {method.areas.map((area, index) => (
+                  <span
+                    key={index}
+                    className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium"
+                  >
+                    {area}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {method.categories && method.categories.length > 0 && (
           <div className="flex items-start space-x-2">
             <Tag className="w-4 h-4 text-gray-500 mt-0.5" />
             <div>
@@ -59,6 +88,31 @@ export const MethodCard: React.FC<MethodCardProps> = ({ method }) => {
             </div>
           </div>
         )}
+
+        <div className="flex items-center space-x-4 pt-3 border-t">
+          {method.paper_url && (
+            <a
+              href={method.paper_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-1 text-sm text-purple-600 hover:text-purple-800"
+            >
+              <FileText className="w-4 h-4" />
+              <span>Paper</span>
+            </a>
+          )}
+          {method.url && (
+            <a
+              href={method.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-1 text-sm text-purple-600 hover:text-purple-800"
+            >
+              <ExternalLink className="w-4 h-4" />
+              <span>Method Page</span>
+            </a>
+          )}
+        </div>
       </div>
     </div>
   );

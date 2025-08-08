@@ -96,7 +96,7 @@ class PapersWithCodeDB:
             )
         ''')
         
-        # Methods table
+        # Enhanced Methods table
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS methods (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,7 +105,42 @@ class PapersWithCodeDB:
                 full_name TEXT,
                 description TEXT,
                 paper_title TEXT,
-                paper_url TEXT
+                paper_url TEXT,
+                introduced_year INTEGER,
+                source_url TEXT,
+                source_title TEXT,
+                code_snippet_url TEXT,
+                num_papers INTEGER
+            )
+        ''')
+        
+        # Method areas table (e.g., "Computer Vision", "Natural Language Processing")
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS method_areas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                area_id TEXT UNIQUE,
+                area_name TEXT UNIQUE
+            )
+        ''')
+        
+        # Method categories table (e.g., "Convolutional Neural Networks", "Transformers")
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS method_categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE,
+                area_id INTEGER,
+                FOREIGN KEY (area_id) REFERENCES method_areas (id)
+            )
+        ''')
+        
+        # Method-Categories relationship table
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS method_categories_rel (
+                method_id INTEGER,
+                category_id INTEGER,
+                FOREIGN KEY (method_id) REFERENCES methods (id),
+                FOREIGN KEY (category_id) REFERENCES method_categories (id),
+                PRIMARY KEY (method_id, category_id)
             )
         ''')
         
@@ -295,7 +330,7 @@ class PapersWithCodeDB:
         logger.info("Papers insertion completed")
         
     def insert_methods(self, methods_file: str):
-        """Insert methods data from JSON file"""
+        """Insert methods data with enhanced areas and categories from JSON file"""
         logger.info(f"Loading methods from {methods_file}...")
         
         with open(methods_file, 'r', encoding='utf-8') as f:
@@ -310,23 +345,73 @@ class PapersWithCodeDB:
             # Handle case where paper field might be None
             paper_data = method.get('paper') or {}
             
+            # Insert method with enhanced fields
             self.cursor.execute('''
-                INSERT OR IGNORE INTO methods (url, name, full_name, description, paper_title, paper_url)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT OR IGNORE INTO methods (
+                    url, name, full_name, description, paper_title, paper_url,
+                    introduced_year, source_url, source_title, code_snippet_url, num_papers
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 method.get('url'),
                 method.get('name'),
                 method.get('full_name'),
                 method.get('description'),
                 paper_data.get('title'),
-                paper_data.get('url')
+                paper_data.get('url'),
+                method.get('introduced_year'),
+                method.get('source_url'),
+                method.get('source_title'),
+                method.get('code_snippet_url'),
+                method.get('num_papers')
             ))
+            
+            # Get method ID for linking to categories
+            method_id = self.cursor.lastrowid
+            if method_id == 0:  # Method already exists, get its ID
+                self.cursor.execute('SELECT id FROM methods WHERE url = ?', (method.get('url'),))
+                result = self.cursor.fetchone()
+                if result:
+                    method_id = result[0]
+            
+            # Process collections (categories and areas)
+            if method.get('collections') and method_id:
+                for collection in method['collections']:
+                    area_id = collection.get('area_id')
+                    area_name = collection.get('area')
+                    category_name = collection.get('collection')
+                    
+                    if area_id and area_name:
+                        # Insert area if not exists
+                        self.cursor.execute('''
+                            INSERT OR IGNORE INTO method_areas (area_id, area_name) VALUES (?, ?)
+                        ''', (area_id, area_name))
+                        
+                        # Get area ID
+                        self.cursor.execute('SELECT id FROM method_areas WHERE area_id = ?', (area_id,))
+                        area_db_id = self.cursor.fetchone()[0]
+                        
+                        if category_name:
+                            # Insert category if not exists
+                            self.cursor.execute('''
+                                INSERT OR IGNORE INTO method_categories (name, area_id) VALUES (?, ?)
+                            ''', (category_name, area_db_id))
+                            
+                            # Get category ID
+                            self.cursor.execute('SELECT id FROM method_categories WHERE name = ? AND area_id = ?', 
+                                              (category_name, area_db_id))
+                            category_id = self.cursor.fetchone()[0]
+                            
+                            # Link method to category
+                            self.cursor.execute('''
+                                INSERT OR IGNORE INTO method_categories_rel (method_id, category_id)
+                                VALUES (?, ?)
+                            ''', (method_id, category_id))
             
             if i % 1000 == 0:
                 self.conn.commit()
                 
         self.conn.commit()
-        logger.info("Methods insertion completed")
+        logger.info("Methods insertion with enhanced areas and categories completed")
         
     def insert_datasets(self, datasets_file: str):
         """Insert datasets data from JSON file"""
@@ -461,9 +546,23 @@ class PapersWithCodeDB:
         # Tasks indexes
         self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_name ON tasks(name)')
         
-        # Methods indexes
+        # Enhanced Methods indexes
         self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_methods_name ON methods(name)')
         self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_methods_url ON methods(url)')
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_methods_introduced_year ON methods(introduced_year)')
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_methods_num_papers ON methods(num_papers)')
+        
+        # Method areas indexes
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_method_areas_area_id ON method_areas(area_id)')
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_method_areas_area_name ON method_areas(area_name)')
+        
+        # Method categories indexes
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_method_categories_name ON method_categories(name)')
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_method_categories_area_id ON method_categories(area_id)')
+        
+        # Method categories relationship indexes
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_method_categories_rel_method_id ON method_categories_rel(method_id)')
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_method_categories_rel_category_id ON method_categories_rel(category_id)')
         
         # Datasets indexes
         self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_datasets_name ON datasets(name)')
@@ -480,14 +579,15 @@ class PapersWithCodeDB:
         """Get statistics about the database"""
         logger.info("Getting database statistics...")
         
-        tables = ['papers', 'authors', 'tasks', 'methods', 'datasets', 'evaluations', 'code_links']
+        tables = ['papers', 'authors', 'tasks', 'methods', 'datasets', 'evaluations', 'code_links', 
+                 'method_areas', 'method_categories']
         
         for table in tables:
             self.cursor.execute(f'SELECT COUNT(*) FROM {table}')
             count = self.cursor.fetchone()[0]
             logger.info(f"{table.capitalize()}: {count:,} records")
             
-        # Get some relationship counts
+        # Get relationship counts
         self.cursor.execute('SELECT COUNT(*) FROM paper_authors')
         paper_authors_count = self.cursor.fetchone()[0]
         logger.info(f"Paper-Author relationships: {paper_authors_count:,}")
@@ -499,6 +599,40 @@ class PapersWithCodeDB:
         self.cursor.execute('SELECT COUNT(*) FROM paper_methods')
         paper_methods_count = self.cursor.fetchone()[0]
         logger.info(f"Paper-Method relationships: {paper_methods_count:,}")
+        
+        self.cursor.execute('SELECT COUNT(*) FROM method_categories_rel')
+        method_categories_count = self.cursor.fetchone()[0]
+        logger.info(f"Method-Category relationships: {method_categories_count:,}")
+        
+        # Get enhanced methods statistics
+        self.cursor.execute('''
+            SELECT ma.area_name, COUNT(DISTINCT mc.id) as category_count, COUNT(DISTINCT m.id) as method_count
+            FROM method_areas ma
+            LEFT JOIN method_categories mc ON ma.id = mc.area_id
+            LEFT JOIN method_categories_rel mcr ON mc.id = mcr.category_id
+            LEFT JOIN methods m ON mcr.method_id = m.id
+            GROUP BY ma.id, ma.area_name
+            ORDER BY method_count DESC
+        ''')
+        
+        area_stats = self.cursor.fetchall()
+        logger.info("Enhanced methods hierarchy:")
+        for area_name, category_count, method_count in area_stats[:10]:  # Show top 10
+            logger.info(f"  {area_name}: {category_count} categories, {method_count} methods")
+            
+        # Get top methods by papers
+        self.cursor.execute('''
+            SELECT name, full_name, num_papers, introduced_year
+            FROM methods 
+            WHERE num_papers > 0
+            ORDER BY num_papers DESC 
+            LIMIT 10
+        ''')
+        
+        top_methods = self.cursor.fetchall()
+        logger.info("Top methods by papers:")
+        for i, (name, full_name, num_papers, year) in enumerate(top_methods, 1):
+            logger.info(f"  {i}. {name}: {num_papers:,} papers ({year})")
 
 def main():
     """Main function to build the database"""

@@ -204,7 +204,7 @@ export const useTasksForDataset = (dataset: string) => {
   return { tasks, loading, error };
 };
 
-export const useDatasets = (page = 1, limit = 20) => {
+export const useDatasets = (searchQuery?: string, page = 1, limit = 20) => {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [pagination, setPagination] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -215,7 +215,9 @@ export const useDatasets = (page = 1, limit = 20) => {
       try {
         setLoading(true);
         setError(null);
-        const result = await api.getDatasets(page, limit);
+        const result = searchQuery 
+          ? await api.searchDatasets(searchQuery, page, limit)
+          : await api.getDatasets(page, limit);
         setDatasets(result.datasets);
         setPagination(result.pagination);
       } catch (err) {
@@ -227,12 +229,12 @@ export const useDatasets = (page = 1, limit = 20) => {
     };
 
     fetchDatasets();
-  }, [page, limit]);
+  }, [searchQuery, page, limit]);
 
   return { datasets, pagination, loading, error };
 };
 
-export const useMethods = (page = 1, limit = 20) => {
+export const useMethods = (page = 1, limit = 20, searchTerm = '', area = '', category = '') => {
   const [methods, setMethods] = useState<Method[]>([]);
   const [pagination, setPagination] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -243,7 +245,7 @@ export const useMethods = (page = 1, limit = 20) => {
       try {
         setLoading(true);
         setError(null);
-        const result = await api.getMethods(page, limit);
+        const result = await api.getMethods(page, limit, searchTerm, area, category);
         setMethods(result.methods);
         setPagination(result.pagination);
       } catch (err) {
@@ -255,7 +257,101 @@ export const useMethods = (page = 1, limit = 20) => {
     };
 
     fetchMethods();
-  }, [page, limit]);
+  }, [page, limit, searchTerm, area, category]);
+
+  return { methods, pagination, loading, error };
+};
+
+export const useMethodsHierarchy = () => {
+  const [hierarchy, setHierarchy] = useState<any>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchHierarchy = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await api.getMethodsHierarchy();
+        setHierarchy(result);
+      } catch (err) {
+        setError('Failed to fetch methods hierarchy');
+        console.error('Error fetching methods hierarchy:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHierarchy();
+  }, []);
+
+  return { hierarchy, loading, error };
+};
+
+export const useMethodsByArea = (area: string, page = 1, limit = 20) => {
+  const [methods, setMethods] = useState<Method[]>([]);
+  const [pagination, setPagination] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchMethods = async () => {
+      if (!area) {
+        setMethods([]);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await api.getMethodsByArea(area, page, limit);
+        setMethods(result.methods);
+        setPagination(result.pagination);
+      } catch (err) {
+        setError('Failed to fetch methods by area');
+        console.error('Error fetching methods by area:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMethods();
+  }, [area, page, limit]);
+
+  return { methods, pagination, loading, error };
+};
+
+export const useMethodsByCategory = (category: string, page = 1, limit = 20) => {
+  const [methods, setMethods] = useState<Method[]>([]);
+  const [pagination, setPagination] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchMethods = async () => {
+      if (!category) {
+        setMethods([]);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await api.getMethodsByCategory(category, page, limit);
+        setMethods(result.methods);
+        setPagination(result.pagination);
+      } catch (err) {
+        setError('Failed to fetch methods by category');
+        console.error('Error fetching methods by category:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMethods();
+  }, [category, page, limit]);
 
   return { methods, pagination, loading, error };
 };

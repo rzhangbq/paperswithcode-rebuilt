@@ -181,3 +181,5 @@ data/*.db-wal
 raw_data/*.gz
 
 raw_data
+
+*.backup

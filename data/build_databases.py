@@ -34,9 +34,17 @@ class PapersWithCodeDB:
         self.cursor = None
         
     def connect(self):
-        """Connect to SQLite database"""
+        """Connect to SQLite database with performance optimizations"""
         self.conn = sqlite3.connect(self.db_path)
         self.cursor = self.conn.cursor()
+        
+        # Performance optimizations
+        self.cursor.execute('PRAGMA journal_mode=WAL')
+        self.cursor.execute('PRAGMA synchronous=NORMAL')
+        self.cursor.execute('PRAGMA cache_size=10000')
+        self.cursor.execute('PRAGMA temp_store=memory')
+        self.cursor.execute('PRAGMA mmap_size=268435456')  # 256MB
+        
         logger.info(f"Connected to database: {self.db_path}")
         
     def close(self):
@@ -114,6 +122,7 @@ class PapersWithCodeDB:
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS method_areas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                area_id TEXT UNIQUE,
                 area_name TEXT UNIQUE
             )
         ''')
@@ -121,10 +130,9 @@ class PapersWithCodeDB:
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS method_categories (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE,
                 area_id INTEGER,
-                category_name TEXT,
-                FOREIGN KEY (area_id) REFERENCES method_areas (id),
-                UNIQUE(area_id, category_name)
+                FOREIGN KEY (area_id) REFERENCES method_areas (id)
             )
         ''')
         
@@ -219,9 +227,14 @@ class PapersWithCodeDB:
             
         logger.info(f"Found {len(papers)} papers to insert")
         
+        # Begin transaction for faster insertion
+        self.cursor.execute('BEGIN TRANSACTION')
+        
         for i, paper in enumerate(papers):
-            if i % 1000 == 0:
+            if i % 5000 == 0 and i > 0:
                 logger.info(f"Processing paper {i+1}/{len(papers)}")
+                self.conn.commit()
+                self.cursor.execute('BEGIN TRANSACTION')
                 
             # Insert paper
             self.cursor.execute('''
@@ -271,9 +284,6 @@ class PapersWithCodeDB:
                         INSERT OR IGNORE INTO paper_tasks (paper_id, task_id)
                         VALUES (?, ?)
                     ''', (paper_id, task_id))
-            
-            if i % 1000 == 0:
-                self.conn.commit()
                 
         self.conn.commit()
         logger.info("Papers insertion completed")
@@ -287,35 +297,8 @@ class PapersWithCodeDB:
             
         logger.info(f"Found {len(methods)} methods to insert")
         
-        # First pass: create areas and categories
-        areas_map = {}
-        categories_map = {}
-        
-        for method in methods:
-            if method.get('categories'):
-                for area_name, categories in method['categories'].items():
-                    # Insert area
-                    self.cursor.execute('INSERT OR IGNORE INTO method_areas (area_name) VALUES (?)', (area_name,))
-                    self.cursor.execute('SELECT id FROM method_areas WHERE area_name = ?', (area_name,))
-                    area_id = self.cursor.fetchone()[0]
-                    areas_map[area_name] = area_id
-                    
-                    # Insert categories
-                    for category_name in categories:
-                        self.cursor.execute('''
-                            INSERT OR IGNORE INTO method_categories (area_id, category_name) 
-                            VALUES (?, ?)
-                        ''', (area_id, category_name))
-                        self.cursor.execute('''
-                            SELECT id FROM method_categories 
-                            WHERE area_id = ? AND category_name = ?
-                        ''', (area_id, category_name))
-                        category_id = self.cursor.fetchone()[0]
-                        categories_map[(area_name, category_name)] = category_id
-        
-        self.conn.commit()
-        
-        # Second pass: insert methods
+
+        # Insert methods with collections processing
         for i, method in enumerate(methods):
             if i % 1000 == 0:
                 logger.info(f"Processing method {i+1}/{len(methods)}")
@@ -343,22 +326,47 @@ class PapersWithCodeDB:
                 paper_data.get('url')
             ))
             
-            # Get method ID
-            self.cursor.execute('SELECT id FROM methods WHERE url = ?', (method.get('url'),))
-            result = self.cursor.fetchone()
-            if result:
-                method_id = result[0]
-                
-                # Link method to categories
-                if method.get('categories'):
-                    for area_name, categories in method['categories'].items():
-                        for category_name in categories:
-                            category_id = categories_map.get((area_name, category_name))
-                            if category_id:
-                                self.cursor.execute('''
-                                    INSERT OR IGNORE INTO method_categories_rel (method_id, category_id)
-                                    VALUES (?, ?)
-                                ''', (method_id, category_id))
+            # Get method ID for linking to categories
+            method_id = self.cursor.lastrowid
+            if method_id == 0:  # Method already exists, get its ID
+                self.cursor.execute('SELECT id FROM methods WHERE url = ?', (method.get('url'),))
+                result = self.cursor.fetchone()
+                if result:
+                    method_id = result[0]
+            
+            # Process collections (categories and areas)
+            if method.get('collections') and method_id:
+                for collection in method['collections']:
+                    area_id = collection.get('area_id')
+                    area_name = collection.get('area')
+                    category_name = collection.get('collection')
+                    
+                    if area_id and area_name:
+                        # Insert area if not exists
+                        self.cursor.execute('''
+                            INSERT OR IGNORE INTO method_areas (area_id, area_name) VALUES (?, ?)
+                        ''', (area_id, area_name))
+                        
+                        # Get area ID
+                        self.cursor.execute('SELECT id FROM method_areas WHERE area_id = ?', (area_id,))
+                        area_db_id = self.cursor.fetchone()[0]
+                        
+                        if category_name:
+                            # Insert category if not exists
+                            self.cursor.execute('''
+                                INSERT OR IGNORE INTO method_categories (name, area_id) VALUES (?, ?)
+                            ''', (category_name, area_db_id))
+                            
+                            # Get category ID
+                            self.cursor.execute('SELECT id FROM method_categories WHERE name = ? AND area_id = ?', 
+                                              (category_name, area_db_id))
+                            category_id = self.cursor.fetchone()[0]
+                            
+                            # Link method to category
+                            self.cursor.execute('''
+                                INSERT OR IGNORE INTO method_categories_rel (method_id, category_id)
+                                VALUES (?, ?)
+                            ''', (method_id, category_id))
             
             if i % 1000 == 0:
                 self.conn.commit()
@@ -503,9 +511,17 @@ class EvaluationDatabaseBuilder:
         self.cursor = None
         
     def connect(self):
-        """Connect to SQLite database"""
+        """Connect to SQLite database with performance optimizations"""
         self.conn = sqlite3.connect(self.db_path)
         self.cursor = self.conn.cursor()
+        
+        # Performance optimizations
+        self.cursor.execute('PRAGMA journal_mode=WAL')
+        self.cursor.execute('PRAGMA synchronous=NORMAL')
+        self.cursor.execute('PRAGMA cache_size=10000')
+        self.cursor.execute('PRAGMA temp_store=memory')
+        self.cursor.execute('PRAGMA mmap_size=268435456')  # 256MB
+        
         logger.info(f"Connected to database: {self.db_path}")
         
     def close(self):

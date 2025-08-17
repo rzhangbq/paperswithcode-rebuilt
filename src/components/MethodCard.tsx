@@ -1,6 +1,7 @@
 import React from 'react';
 import { Layers, Calendar, Tag, BookOpen, FileText, ExternalLink, Users } from 'lucide-react';
 import { Method } from '../types';
+import { ContentRenderer } from './ContentRenderer';
 
 interface MethodCardProps {
   method: Method;
@@ -33,9 +34,9 @@ export const MethodCard: React.FC<MethodCardProps> = ({ method }) => {
       </div>
 
       {method.description && (
-        <p className="text-gray-700 text-sm leading-relaxed mb-4">
-          {method.description}
-        </p>
+        <div className="text-gray-700 text-sm leading-relaxed mb-4">
+          <ContentRenderer content={method.description} />
+        </div>
       )}
 
       <div className="space-y-3">

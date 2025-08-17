@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { Header } from './components/Header';
 import { PapersPage } from './pages/PapersPage';
 import { LeaderboardsPage } from './pages/LeaderboardsPage';
 import { DatasetsPage } from './pages/DatasetsPage';
 import { MethodsPage } from './pages/MethodsPage';
+import { MathTestPage } from './components/MathTestPage';
 
 function App() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +36,7 @@ function App() {
           <Route path="/leaderboards" element={<LeaderboardsPage />} />
           <Route path="/datasets" element={<DatasetsPage />} />
           <Route path="/methods" element={<MethodsPage />} />
+          <Route path="/math-test" element={<MathTestPage />} />
         </Routes>
       </main>
     </div>

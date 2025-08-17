@@ -53,6 +53,12 @@ class PapersWithCodeDB:
             self.conn.close()
             logger.info("Database connection closed")
             
+    def drop_database(self):
+        """Drop the existing database file to ensure clean schema"""
+        if os.path.exists(self.db_path):
+            os.remove(self.db_path)
+            logger.info(f"Dropped existing database: {self.db_path}")
+            
     def create_tables(self):
         """Create all necessary tables"""
         logger.info("Creating database tables...")
@@ -819,6 +825,7 @@ def main():
     try:
         logger.info("\n🚀 Building papers_with_code.db...")
         db = PapersWithCodeDB()
+        db.drop_database()  # Drop existing database to ensure clean schema
         db.connect()
         db.create_tables()
         

@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Line, Scatter } from "react-chartjs-2";
+import { Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -105,10 +105,17 @@ export const LeaderboardChart: React.FC<LeaderboardChartProps> = ({
     });
 
     // Find top performers (cumulative best performance over time)
-    const topPerformers = [];
+    interface TopPerformer {
+      date: Date;
+      value: number;
+      model: string;
+      paper: string;
+    }
+    
+    const topPerformers: TopPerformer[] = [];
     let currentBestValue = -Infinity;
 
-    validEvaluations.forEach((evaluation, index) => {
+    validEvaluations.forEach((evaluation) => {
       const value = evaluation.metrics[primaryMetric];
       if (value === null || value === undefined) return;
       const numValue = typeof value === "string" ? parseFloat(value) : value;
@@ -154,33 +161,14 @@ export const LeaderboardChart: React.FC<LeaderboardChartProps> = ({
 
     // Create datasets with proper time scale data structure
     const datasets = [
-      // Background scatter plot (all points)
-      {
-        label: "All Results",
-        data: validEvaluations
-          .map((evaluation, index) => ({
-            x: parseDate(evaluation.date),
-            y: backgroundData[index],
-            model: evaluation.model_name,
-            paper: evaluation.paper_title,
-          }))
-          .filter((point) => point.y !== null),
-        type: "scatter",
-        backgroundColor: "rgba(128, 128, 128, 0.3)",
-        borderColor: "rgba(128, 128, 128, 0.5)",
-        pointRadius: 2,
-        pointHoverRadius: 4,
-        showLine: false,
-        order: 2,
-      },
-      // Main storyline (top performers)
+      // Main storyline (top performers) - simplified for now
       {
         label: "Top Performers",
         data: topPerformers.map((p) => ({
           x: p.date,
           y: p.value,
         })),
-        type: "line",
+        type: "line" as const,
         backgroundColor: "rgba(0, 255, 255, 0.1)",
         borderColor: "rgb(0, 255, 255)",
         borderWidth: 3,
@@ -470,11 +458,12 @@ export const LeaderboardChart: React.FC<LeaderboardChartProps> = ({
             return <Line data={chartData} options={chartOptions} />;
           } catch (error) {
             console.error("Error rendering chart:", error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             return (
               <div className="flex items-center justify-center h-full">
                 <div className="text-red-500 text-center">
                   <p>Error rendering chart</p>
-                  <p className="text-sm text-gray-500">{error.message}</p>
+                  <p className="text-sm text-gray-500">{errorMessage}</p>
                 </div>
               </div>
             );

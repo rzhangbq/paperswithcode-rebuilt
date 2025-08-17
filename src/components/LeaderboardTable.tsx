@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Trophy, ExternalLink, TrendingUp, Calendar, Users, BarChart3, Star, Award } from 'lucide-react';
+import { Trophy, ExternalLink, TrendingUp, Calendar, BarChart3, Award } from 'lucide-react';
 import { EvaluationTable } from '../types';
 import { PerformanceChart } from './PerformanceChart';
 import { parseDate, formatDate, getYear, isValidDate } from '../utils/dateUtils';
@@ -17,6 +17,12 @@ interface CumulativeBest {
   paper: string;
   date: string;
   isNewRecord: boolean;
+}
+
+interface ProcessedEvaluation extends EvaluationTable {
+  isNewRecord: boolean;
+  cumulativeBest: number;
+  numericScore: number;
 }
 
 export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({ 
@@ -43,13 +49,13 @@ export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({
     const testDates = evaluations.slice(0, 5).map(e => ({ date: e.date, valid: isValidDate(e.date) }));
     console.log('Test dates:', testDates);
     if (!evaluations || evaluations.length === 0) {
-      return { processedEvaluations: [], cumulativeBest: [] };
+      return { processedEvaluations: [] as ProcessedEvaluation[], cumulativeBest: [] };
     }
 
     // Get the primary metric (first metric in the first evaluation)
     const primaryMetric = Object.keys(evaluations[0]?.metrics || {})[0];
     if (!primaryMetric) {
-      return { processedEvaluations: evaluations, cumulativeBest: [] };
+      return { processedEvaluations: [] as ProcessedEvaluation[], cumulativeBest: [] };
     }
 
     // Filter out evaluations with invalid dates and sort by date (oldest first)
@@ -63,10 +69,10 @@ export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({
     // Track cumulative best performance
     let currentBest = -Infinity;
     const cumulativeBest: CumulativeBest[] = [];
-    const processedEvaluations = sortedEvaluations.map((evaluation, index) => {
+    const processedEvaluations: ProcessedEvaluation[] = sortedEvaluations.map((evaluation) => {
       const score = evaluation.metrics[primaryMetric];
       if (score === null || score === undefined || score === '') {
-        return { ...evaluation, isNewRecord: false, cumulativeBest: currentBest };
+        return { ...evaluation, isNewRecord: false, cumulativeBest: currentBest, numericScore: 0 };
       }
 
       // Convert score to number, handling percentage strings
@@ -78,7 +84,7 @@ export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({
       }
 
       if (isNaN(numericScore)) {
-        return { ...evaluation, isNewRecord: false, cumulativeBest: currentBest };
+        return { ...evaluation, isNewRecord: false, cumulativeBest: currentBest, numericScore: 0 };
       }
 
       const year = getYear(evaluation.date);

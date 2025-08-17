@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Database, ExternalLink, Tag, Calendar, Globe, BarChart3, ChevronDown } from 'lucide-react';
+import { Database, Tag, Globe, BarChart3, ChevronDown } from 'lucide-react';
 import { Dataset } from '../types';
 import { api } from '../services/api';
+import { ContentRenderer } from './ContentRenderer';
 
 interface DatasetCardProps {
   dataset: Dataset;
@@ -129,9 +129,9 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
         </div>
       )}
 
-      <p className="text-gray-700 text-sm leading-relaxed mb-4">
-        {dataset.short_description || dataset.description}
-      </p>
+      <div className="text-gray-700 text-sm leading-relaxed mb-4">
+        <ContentRenderer content={dataset.short_description || dataset.description} />
+      </div>
 
       <div className="space-y-3">
         {dataset.parent_dataset && (

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ExternalLink, Calendar, Users, Github, FileText, Hash, Award, Copy } from 'lucide-react';
 import { Paper } from '../types';
+import { ContentRenderer } from './ContentRenderer';
 
 interface PaperCardProps {
   paper: Paper;
@@ -145,14 +146,14 @@ export const PaperCard: React.FC<PaperCardProps> = ({ paper, codeLinks = [] }) =
       </div>
 
       {paper.short_abstract && (
-        <p className="text-gray-600 text-sm leading-relaxed mb-3 italic">
-          {paper.short_abstract}
-        </p>
+        <div className="text-gray-600 text-sm leading-relaxed mb-3 italic">
+          <ContentRenderer content={paper.short_abstract} />
+        </div>
       )}
       
-      <p className="text-gray-700 text-sm leading-relaxed mb-4">
-        {truncateAbstract(paper.abstract)}
-      </p>
+      <div className="text-gray-700 text-sm leading-relaxed mb-4">
+        <ContentRenderer content={truncateAbstract(paper.abstract)} />
+      </div>
 
       {paper.proceeding && (
         <div className="flex items-center space-x-2 mb-3 p-2 bg-gray-50 border border-gray-200 rounded-lg">

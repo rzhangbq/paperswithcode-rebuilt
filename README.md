@@ -44,6 +44,7 @@ This application serves as a research tool for:
 ### Prerequisites
 - Node.js (v16 or higher)
 - npm or yarn
+- Python 3.7+ (for database building and cleaning)
 - wget (for downloading data files)
 - gunzip (for extracting compressed files)
 
@@ -70,7 +71,16 @@ This application serves as a research tool for:
    - Set up optimized schema with indexes
    - Import all data efficiently
 
-4. **Start the development server**
+4. **Clean the database** (recommended for optimal performance)
+   ```bash
+   python clean_methods_database.py
+   ```
+   This will:
+   - Remove spam entries and irrelevant content
+   - Clean up customer service spam, phone numbers, and commercial content
+   - Ensure only legitimate academic content remains
+
+5. **Start the development server**
    ```bash
    npm run dev:full
    ```
@@ -108,15 +118,29 @@ paperswithcode-rebuilt/
 │   │   ├── DatasetCard.tsx      # Dataset information display
 │   │   ├── MethodCard.tsx       # Method information display
 │   │   ├── LeaderboardTable.tsx # Performance leaderboard
+│   │   ├── LeaderboardChart.tsx # Chart visualization for leaderboards
+│   │   ├── PerformanceChart.tsx # Performance metrics visualization
+│   │   ├── ContentRenderer.tsx  # Content rendering utilities
+│   │   ├── MathRenderer.tsx     # Mathematical expression rendering
 │   │   └── LoadingSpinner.tsx   # Loading indicator
 │   ├── hooks/                   # Custom React hooks
+│   │   └── useData.ts          # Data fetching and caching hooks
 │   ├── services/                # API service functions
 │   ├── types/                   # TypeScript type definitions
+│   ├── pages/                   # Page components
+│   │   ├── PapersPage.tsx      # Papers listing page
+│   │   ├── DatasetsPage.tsx    # Datasets listing page
+│   │   ├── MethodsPage.tsx     # Methods listing page
+│   │   └── LeaderboardsPage.tsx # Leaderboards page
+│   ├── utils/                   # Utility functions
+│   │   └── dateUtils.ts        # Date handling utilities
 │   ├── App.tsx                  # Main application component
 │   └── main.tsx                 # Application entry point
 ├── data/                        # Data files and database
 │   ├── papers_with_code.db     # SQLite database with all data
 │   ├── build_database.py       # Database builder script
+│   ├── clean_methods_database.py # Database cleaning script
+│   ├── clean_dataset_database.py # Dataset cleaning script
 │   └── README.md               # Database documentation
 ├── server.js                   # Express.js backend server
 └── package.json                # Project dependencies and scripts
@@ -131,6 +155,10 @@ paperswithcode-rebuilt/
 - **DatasetCard**: Shows dataset details and usage statistics
 - **MethodCard**: Presents research methods and their applications
 - **LeaderboardTable**: Displays performance rankings for different tasks and datasets
+- **LeaderboardChart**: Interactive charts for visualizing performance data
+- **PerformanceChart**: Performance metrics visualization
+- **ContentRenderer**: Utilities for rendering various content types
+- **MathRenderer**: Mathematical expression rendering with LaTeX support
 - **LoadingSpinner**: Visual feedback during data loading
 
 ### Backend Services
@@ -165,6 +193,20 @@ The application now uses a **SQLite database** instead of JSON streaming for imp
 - **Relationship tables**: paper_authors, paper_tasks, paper_methods, evaluation_categories_rel
 - **Optimized indexes** on frequently queried fields
 
+### Current Database Statistics:
+- **Total papers**: ~2.4M academic papers with abstracts
+- **Methods**: 1,940 legitimate research methods (cleaned from 8,725 total)
+- **Datasets**: Cleaned and validated research datasets
+- **Code links**: Connections between papers and implementations
+- **Evaluations**: Performance metrics and leaderboards
+
+### Database Cleaning:
+- **Comprehensive spam removal** from methods database
+- **Removed 6,706 spam entries** (76.8% of original methods were spam)
+- **Cleaned categories**: Customer service spam, phone numbers, travel/airline spam, commercial advertising
+- **Preserved legitimate content**: All academic methods and research content maintained
+- **Multi-language support**: Handles spam in English and Spanish
+
 ### Migration:
 - The old JSON streaming approach has been replaced with database queries
 - All data is now stored in `data/papers_with_code.db`
@@ -176,6 +218,7 @@ The application now uses a **SQLite database** instead of JSON streaming for imp
 - **Real-time results** with debounced input
 - **Pagination** for large result sets
 - **Filtering** by different data types
+- **Mathematical expression rendering** with LaTeX support
 
 ## 🎨 UI/UX Features
 
@@ -184,6 +227,8 @@ The application now uses a **SQLite database** instead of JSON streaming for imp
 - **Loading States**: Smooth loading indicators
 - **Error Handling**: Graceful error messages and recovery
 - **Mobile Responsive**: Optimized for all screen sizes
+- **Interactive Charts**: Performance visualization with charts
+- **Mathematical Rendering**: Beautiful LaTeX math expression display
 
 ## 🚀 Performance Optimizations
 
@@ -192,6 +237,32 @@ The application now uses a **SQLite database** instead of JSON streaming for imp
 - **Lazy loading** of components and data
 - **Efficient pagination** for large datasets
 - **Database-driven search** with full-text search capabilities
+- **Cleaned database** with only legitimate academic content for faster queries
+
+## 🧹 Database Maintenance
+
+### Cleaning Scripts
+The project includes automated cleaning scripts to maintain data quality:
+
+- **`clean_methods_database.py`**: Removes spam from methods database
+  - Detects customer service spam, phone numbers, travel content
+  - Removes commercial advertising and irrelevant content
+  - Preserves legitimate research methods
+  - Multi-language spam detection (English/Spanish)
+
+- **`clean_dataset_database.py`**: Cleans dataset database
+  - Removes invalid homepages and spam entries
+  - Ensures dataset quality and relevance
+
+### Running Maintenance
+```bash
+cd data
+# Clean methods database
+python clean_methods_database.py
+
+# Clean datasets database
+python clean_dataset_database.py
+```
 
 ## 🤝 Contributing
 
@@ -201,6 +272,13 @@ The application now uses a **SQLite database** instead of JSON streaming for imp
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+### Development Guidelines
+- Follow TypeScript best practices
+- Use Tailwind CSS for styling
+- Ensure responsive design for mobile devices
+- Add tests for new functionality
+- Update documentation for new features
+
 ## 📝 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
@@ -209,6 +287,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - [Papers with Code](https://paperswithcode.com/) for providing the data
 - The open-source community for the amazing tools and libraries used in this project
+- Contributors who helped clean and maintain the database quality
 
 ## 📞 Support
 
@@ -216,6 +295,16 @@ If you encounter any issues or have questions:
 1. Check the existing issues in the repository
 2. Create a new issue with detailed information about your problem
 3. Include system information and error messages
+4. For database-related issues, check the `data/` directory documentation
+
+## 🔄 Data Updates
+
+The application can be updated with fresh data from Papers with Code:
+
+1. **Download new data** from the official sources
+2. **Rebuild the database** using `python build_database.py`
+3. **Clean the database** using the cleaning scripts
+4. **Restart the application** to use the updated data
 
 ---
 

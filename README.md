@@ -1,5 +1,17 @@
 # Papers with Code Rebuilt
 
+> ⚠️ **IMPORTANT WARNING** ⚠️
+> 
+> This application is rebuilt from the **discontinued Papers with Code website**. All data remains **un-updated since the website shut down** and should be considered a historical snapshot rather than current research information.
+> 
+> **What this means:**
+> - Data is frozen as of when Papers with Code was discontinued
+> - No new papers, methods, or datasets are being added
+> - Performance metrics and leaderboards are not current
+> - Use this for historical research and reference purposes only
+> 
+> ---
+
 A modern web application that provides a comprehensive interface for exploring academic papers, code repositories, datasets, methods, and leaderboards from the Papers with Code platform. This project rebuilds the core functionality of Papers with Code with a focus on performance, user experience, and modern web technologies.
 
 ## 🎯 Purpose
